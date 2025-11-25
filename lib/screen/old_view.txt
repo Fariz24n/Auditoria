@@ -1,0 +1,116 @@
+// lib/screen/pdf_view_screen.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../drift/app_database.dart';
+import '../service/database_instance.dart';
+import '../service/ai/ai_activation.dart';
+import '../screen/reader.dart';
+
+class PdfViewScreen extends StatefulWidget {
+  final int bookId;
+
+  const PdfViewScreen({required this.bookId, super.key});
+
+  @override
+  State<PdfViewScreen> createState() => _PdfViewScreenState();
+}
+
+class _PdfViewScreenState extends State<PdfViewScreen> {
+  Book? book;
+  final _reader = ReadingSessionManager();
+
+  late StreamSubscription<bool> _aiSub;
+  bool _aiActive = AiActivationService.instance.isActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBook();
+
+    // Dengarkan perubahan status AI global
+    _aiSub = AiActivationService.instance.onActivationChanged.listen((active) {
+      setState(() {
+        _aiActive = active;
+      });
+
+      // Kalau AI baru diaktifkan, mulai sesi untuk buku saat ini
+      if (active && book != null && book!.filePath.isNotEmpty) {
+        _reader.startSession(book!.filePath);
+      } else if (!active) {
+        _reader.dispose(); // matikan analisis aktif
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _aiSub.cancel();
+    _reader.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBook() async {
+    final allBooks = await db.getAllBooks();
+    final match = allBooks.where((b) => b.id == widget.bookId);
+    if (match.isNotEmpty) {
+      setState(() {
+        book = match.first;
+      });
+
+      // Jalankan analisis hanya jika AI aktif
+      if (book!.filePath.isNotEmpty && AiActivationService.instance.isActive) {
+        _reader.startSession(book!.filePath);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (book == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(book!.title),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _aiActive ? Icons.memory : Icons.memory_outlined,
+              color: _aiActive ? Colors.amber : null,
+            ),
+            tooltip: _aiActive ? 'Matikan AI' : 'Aktifkan AI',
+            onPressed: () {
+              AiActivationService.instance.toggle();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    AiActivationService.instance.isActive
+                        ? 'Mode AI diaktifkan.'
+                        : 'Mode AI dimatikan.',
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Center(
+        child: Text(
+          '''
+Judul Buku: ${book!.title}
+
+Lokasi File:
+${book!.filePath}
+
+Tema:
+${book!.theme ?? '(belum dianalisis)'}
+          ''',
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
