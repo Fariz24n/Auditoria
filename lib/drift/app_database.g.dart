@@ -472,12 +472,164 @@ class BooksCompanion extends UpdateCompanion<Book> {
   }
 }
 
-class $ThemeMusicTable extends ThemeMusic
-    with TableInfo<$ThemeMusicTable, ThemeMusicData> {
+class $ThemesTable extends Themes with TableInfo<$ThemesTable, Vibe> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $ThemeMusicTable(this.attachedDatabase, [this._alias]);
+  $ThemesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [name];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'vibes';
+  @override
+  VerificationContext validateIntegrity(Insertable<Vibe> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {name};
+  @override
+  Vibe map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Vibe(
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+    );
+  }
+
+  @override
+  $ThemesTable createAlias(String alias) {
+    return $ThemesTable(attachedDatabase, alias);
+  }
+}
+
+class Vibe extends DataClass implements Insertable<Vibe> {
+  final String name;
+  const Vibe({required this.name});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['name'] = Variable<String>(name);
+    return map;
+  }
+
+  ThemesCompanion toCompanion(bool nullToAbsent) {
+    return ThemesCompanion(
+      name: Value(name),
+    );
+  }
+
+  factory Vibe.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Vibe(
+      name: serializer.fromJson<String>(json['name']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'name': serializer.toJson<String>(name),
+    };
+  }
+
+  Vibe copyWith({String? name}) => Vibe(
+        name: name ?? this.name,
+      );
+  Vibe copyWithCompanion(ThemesCompanion data) {
+    return Vibe(
+      name: data.name.present ? data.name.value : this.name,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Vibe(')
+          ..write('name: $name')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => name.hashCode;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || (other is Vibe && other.name == this.name);
+}
+
+class ThemesCompanion extends UpdateCompanion<Vibe> {
+  final Value<String> name;
+  final Value<int> rowid;
+  const ThemesCompanion({
+    this.name = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ThemesCompanion.insert({
+    required String name,
+    this.rowid = const Value.absent(),
+  }) : name = Value(name);
+  static Insertable<Vibe> custom({
+    Expression<String>? name,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (name != null) 'name': name,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ThemesCompanion copyWith({Value<String>? name, Value<int>? rowid}) {
+    return ThemesCompanion(
+      name: name ?? this.name,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ThemesCompanion(')
+          ..write('name: $name, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SongsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
@@ -487,37 +639,56 @@ class $ThemeMusicTable extends ThemeMusic
       requiredDuringInsert: false,
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
-  static const VerificationMeta _themeMeta = const VerificationMeta('theme');
+  static const VerificationMeta _themeNameMeta =
+      const VerificationMeta('themeName');
   @override
-  late final GeneratedColumn<String> theme = GeneratedColumn<String>(
-      'theme', aliasedName, false,
+  late final GeneratedColumn<String> themeName = GeneratedColumn<String>(
+      'theme_name', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+      'title', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _filePathMeta =
       const VerificationMeta('filePath');
   @override
   late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
       'file_path', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _orderIndexMeta =
+      const VerificationMeta('orderIndex');
   @override
-  List<GeneratedColumn> get $columns => [id, theme, filePath];
+  late final GeneratedColumn<int> orderIndex = GeneratedColumn<int>(
+      'order_index', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, themeName, title, filePath, orderIndex];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'theme_music';
+  static const String $name = 'songs';
   @override
-  VerificationContext validateIntegrity(Insertable<ThemeMusicData> instance,
+  VerificationContext validateIntegrity(Insertable<Song> instance,
       {bool isInserting = false}) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
-    if (data.containsKey('theme')) {
-      context.handle(
-          _themeMeta, theme.isAcceptableOrUnknown(data['theme']!, _themeMeta));
+    if (data.containsKey('theme_name')) {
+      context.handle(_themeNameMeta,
+          themeName.isAcceptableOrUnknown(data['theme_name']!, _themeNameMeta));
     } else if (isInserting) {
-      context.missing(_themeMeta);
+      context.missing(_themeNameMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+          _titleMeta, title.isAcceptableOrUnknown(data['title']!, _titleMeta));
     }
     if (data.containsKey('file_path')) {
       context.handle(_filePathMeta,
@@ -525,60 +696,85 @@ class $ThemeMusicTable extends ThemeMusic
     } else if (isInserting) {
       context.missing(_filePathMeta);
     }
+    if (data.containsKey('order_index')) {
+      context.handle(
+          _orderIndexMeta,
+          orderIndex.isAcceptableOrUnknown(
+              data['order_index']!, _orderIndexMeta));
+    }
     return context;
   }
 
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  ThemeMusicData map(Map<String, dynamic> data, {String? tablePrefix}) {
+  Song map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return ThemeMusicData(
+    return Song(
       id: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
-      theme: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}theme'])!,
+      themeName: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}theme_name'])!,
+      title: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}title']),
       filePath: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}file_path'])!,
+      orderIndex: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}order_index'])!,
     );
   }
 
   @override
-  $ThemeMusicTable createAlias(String alias) {
-    return $ThemeMusicTable(attachedDatabase, alias);
+  $SongsTable createAlias(String alias) {
+    return $SongsTable(attachedDatabase, alias);
   }
 }
 
-class ThemeMusicData extends DataClass implements Insertable<ThemeMusicData> {
+class Song extends DataClass implements Insertable<Song> {
   final int id;
-  final String theme;
+  final String themeName;
+  final String? title;
   final String filePath;
-  const ThemeMusicData(
-      {required this.id, required this.theme, required this.filePath});
+  final int orderIndex;
+  const Song(
+      {required this.id,
+      required this.themeName,
+      this.title,
+      required this.filePath,
+      required this.orderIndex});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    map['theme'] = Variable<String>(theme);
+    map['theme_name'] = Variable<String>(themeName);
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
     map['file_path'] = Variable<String>(filePath);
+    map['order_index'] = Variable<int>(orderIndex);
     return map;
   }
 
-  ThemeMusicCompanion toCompanion(bool nullToAbsent) {
-    return ThemeMusicCompanion(
+  SongsCompanion toCompanion(bool nullToAbsent) {
+    return SongsCompanion(
       id: Value(id),
-      theme: Value(theme),
+      themeName: Value(themeName),
+      title:
+          title == null && nullToAbsent ? const Value.absent() : Value(title),
       filePath: Value(filePath),
+      orderIndex: Value(orderIndex),
     );
   }
 
-  factory ThemeMusicData.fromJson(Map<String, dynamic> json,
+  factory Song.fromJson(Map<String, dynamic> json,
       {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return ThemeMusicData(
+    return Song(
       id: serializer.fromJson<int>(json['id']),
-      theme: serializer.fromJson<String>(json['theme']),
+      themeName: serializer.fromJson<String>(json['themeName']),
+      title: serializer.fromJson<String?>(json['title']),
       filePath: serializer.fromJson<String>(json['filePath']),
+      orderIndex: serializer.fromJson<int>(json['orderIndex']),
     );
   }
   @override
@@ -586,79 +782,111 @@ class ThemeMusicData extends DataClass implements Insertable<ThemeMusicData> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'theme': serializer.toJson<String>(theme),
+      'themeName': serializer.toJson<String>(themeName),
+      'title': serializer.toJson<String?>(title),
       'filePath': serializer.toJson<String>(filePath),
+      'orderIndex': serializer.toJson<int>(orderIndex),
     };
   }
 
-  ThemeMusicData copyWith({int? id, String? theme, String? filePath}) =>
-      ThemeMusicData(
+  Song copyWith(
+          {int? id,
+          String? themeName,
+          Value<String?> title = const Value.absent(),
+          String? filePath,
+          int? orderIndex}) =>
+      Song(
         id: id ?? this.id,
-        theme: theme ?? this.theme,
+        themeName: themeName ?? this.themeName,
+        title: title.present ? title.value : this.title,
         filePath: filePath ?? this.filePath,
+        orderIndex: orderIndex ?? this.orderIndex,
       );
-  ThemeMusicData copyWithCompanion(ThemeMusicCompanion data) {
-    return ThemeMusicData(
+  Song copyWithCompanion(SongsCompanion data) {
+    return Song(
       id: data.id.present ? data.id.value : this.id,
-      theme: data.theme.present ? data.theme.value : this.theme,
+      themeName: data.themeName.present ? data.themeName.value : this.themeName,
+      title: data.title.present ? data.title.value : this.title,
       filePath: data.filePath.present ? data.filePath.value : this.filePath,
+      orderIndex:
+          data.orderIndex.present ? data.orderIndex.value : this.orderIndex,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('ThemeMusicData(')
+    return (StringBuffer('Song(')
           ..write('id: $id, ')
-          ..write('theme: $theme, ')
-          ..write('filePath: $filePath')
+          ..write('themeName: $themeName, ')
+          ..write('title: $title, ')
+          ..write('filePath: $filePath, ')
+          ..write('orderIndex: $orderIndex')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, theme, filePath);
+  int get hashCode => Object.hash(id, themeName, title, filePath, orderIndex);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is ThemeMusicData &&
+      (other is Song &&
           other.id == this.id &&
-          other.theme == this.theme &&
-          other.filePath == this.filePath);
+          other.themeName == this.themeName &&
+          other.title == this.title &&
+          other.filePath == this.filePath &&
+          other.orderIndex == this.orderIndex);
 }
 
-class ThemeMusicCompanion extends UpdateCompanion<ThemeMusicData> {
+class SongsCompanion extends UpdateCompanion<Song> {
   final Value<int> id;
-  final Value<String> theme;
+  final Value<String> themeName;
+  final Value<String?> title;
   final Value<String> filePath;
-  const ThemeMusicCompanion({
+  final Value<int> orderIndex;
+  const SongsCompanion({
     this.id = const Value.absent(),
-    this.theme = const Value.absent(),
+    this.themeName = const Value.absent(),
+    this.title = const Value.absent(),
     this.filePath = const Value.absent(),
+    this.orderIndex = const Value.absent(),
   });
-  ThemeMusicCompanion.insert({
+  SongsCompanion.insert({
     this.id = const Value.absent(),
-    required String theme,
+    required String themeName,
+    this.title = const Value.absent(),
     required String filePath,
-  })  : theme = Value(theme),
+    this.orderIndex = const Value.absent(),
+  })  : themeName = Value(themeName),
         filePath = Value(filePath);
-  static Insertable<ThemeMusicData> custom({
+  static Insertable<Song> custom({
     Expression<int>? id,
-    Expression<String>? theme,
+    Expression<String>? themeName,
+    Expression<String>? title,
     Expression<String>? filePath,
+    Expression<int>? orderIndex,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (theme != null) 'theme': theme,
+      if (themeName != null) 'theme_name': themeName,
+      if (title != null) 'title': title,
       if (filePath != null) 'file_path': filePath,
+      if (orderIndex != null) 'order_index': orderIndex,
     });
   }
 
-  ThemeMusicCompanion copyWith(
-      {Value<int>? id, Value<String>? theme, Value<String>? filePath}) {
-    return ThemeMusicCompanion(
+  SongsCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? themeName,
+      Value<String?>? title,
+      Value<String>? filePath,
+      Value<int>? orderIndex}) {
+    return SongsCompanion(
       id: id ?? this.id,
-      theme: theme ?? this.theme,
+      themeName: themeName ?? this.themeName,
+      title: title ?? this.title,
       filePath: filePath ?? this.filePath,
+      orderIndex: orderIndex ?? this.orderIndex,
     );
   }
 
@@ -668,21 +896,29 @@ class ThemeMusicCompanion extends UpdateCompanion<ThemeMusicData> {
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
-    if (theme.present) {
-      map['theme'] = Variable<String>(theme.value);
+    if (themeName.present) {
+      map['theme_name'] = Variable<String>(themeName.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
     }
     if (filePath.present) {
       map['file_path'] = Variable<String>(filePath.value);
+    }
+    if (orderIndex.present) {
+      map['order_index'] = Variable<int>(orderIndex.value);
     }
     return map;
   }
 
   @override
   String toString() {
-    return (StringBuffer('ThemeMusicCompanion(')
+    return (StringBuffer('SongsCompanion(')
           ..write('id: $id, ')
-          ..write('theme: $theme, ')
-          ..write('filePath: $filePath')
+          ..write('themeName: $themeName, ')
+          ..write('title: $title, ')
+          ..write('filePath: $filePath, ')
+          ..write('orderIndex: $orderIndex')
           ..write(')'))
         .toString();
   }
@@ -692,12 +928,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $BooksTable books = $BooksTable(this);
-  late final $ThemeMusicTable themeMusic = $ThemeMusicTable(this);
+  late final $ThemesTable vibes = $ThemesTable(this);
+  late final $SongsTable songs = $SongsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [books, themeMusic];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [books, vibes, songs];
 }
 
 typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
@@ -920,20 +1157,127 @@ typedef $$BooksTableProcessedTableManager = ProcessedTableManager<
     (Book, BaseReferences<_$AppDatabase, $BooksTable, Book>),
     Book,
     PrefetchHooks Function()>;
-typedef $$ThemeMusicTableCreateCompanionBuilder = ThemeMusicCompanion Function({
-  Value<int> id,
-  required String theme,
-  required String filePath,
+typedef $$ThemesTableCreateCompanionBuilder = ThemesCompanion Function({
+  required String name,
+  Value<int> rowid,
 });
-typedef $$ThemeMusicTableUpdateCompanionBuilder = ThemeMusicCompanion Function({
-  Value<int> id,
-  Value<String> theme,
-  Value<String> filePath,
+typedef $$ThemesTableUpdateCompanionBuilder = ThemesCompanion Function({
+  Value<String> name,
+  Value<int> rowid,
 });
 
-class $$ThemeMusicTableFilterComposer
-    extends Composer<_$AppDatabase, $ThemeMusicTable> {
-  $$ThemeMusicTableFilterComposer({
+class $$ThemesTableFilterComposer extends Composer<_$AppDatabase, $ThemesTable> {
+  $$ThemesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+}
+
+class $$ThemesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ThemesTable> {
+  $$ThemesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ThemesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ThemesTable> {
+  $$ThemesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+}
+
+class $$ThemesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ThemesTable,
+    Vibe,
+    $$ThemesTableFilterComposer,
+    $$ThemesTableOrderingComposer,
+    $$ThemesTableAnnotationComposer,
+    $$ThemesTableCreateCompanionBuilder,
+    $$ThemesTableUpdateCompanionBuilder,
+    (Vibe, BaseReferences<_$AppDatabase, $ThemesTable, Vibe>),
+    Vibe,
+    PrefetchHooks Function()> {
+  $$ThemesTableTableManager(_$AppDatabase db, $ThemesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ThemesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ThemesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ThemesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> name = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ThemesCompanion(
+            name: name,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String name,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ThemesCompanion.insert(
+            name: name,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ThemesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ThemesTable,
+    Vibe,
+    $$ThemesTableFilterComposer,
+    $$ThemesTableOrderingComposer,
+    $$ThemesTableAnnotationComposer,
+    $$ThemesTableCreateCompanionBuilder,
+    $$ThemesTableUpdateCompanionBuilder,
+    (Vibe, BaseReferences<_$AppDatabase, $ThemesTable, Vibe>),
+    Vibe,
+    PrefetchHooks Function()>;
+typedef $$SongsTableCreateCompanionBuilder = SongsCompanion Function({
+  Value<int> id,
+  required String themeName,
+  Value<String?> title,
+  required String filePath,
+  Value<int> orderIndex,
+});
+typedef $$SongsTableUpdateCompanionBuilder = SongsCompanion Function({
+  Value<int> id,
+  Value<String> themeName,
+  Value<String?> title,
+  Value<String> filePath,
+  Value<int> orderIndex,
+});
+
+class $$SongsTableFilterComposer extends Composer<_$AppDatabase, $SongsTable> {
+  $$SongsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -943,16 +1287,22 @@ class $$ThemeMusicTableFilterComposer
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get theme => $composableBuilder(
-      column: $table.theme, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get themeName => $composableBuilder(
+      column: $table.themeName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get filePath => $composableBuilder(
       column: $table.filePath, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get orderIndex => $composableBuilder(
+      column: $table.orderIndex, builder: (column) => ColumnFilters(column));
 }
 
-class $$ThemeMusicTableOrderingComposer
-    extends Composer<_$AppDatabase, $ThemeMusicTable> {
-  $$ThemeMusicTableOrderingComposer({
+class $$SongsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SongsTable> {
+  $$SongsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -962,16 +1312,22 @@ class $$ThemeMusicTableOrderingComposer
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get theme => $composableBuilder(
-      column: $table.theme, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get themeName => $composableBuilder(
+      column: $table.themeName, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get title => $composableBuilder(
+      column: $table.title, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get filePath => $composableBuilder(
       column: $table.filePath, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get orderIndex => $composableBuilder(
+      column: $table.orderIndex, builder: (column) => ColumnOrderings(column));
 }
 
-class $$ThemeMusicTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ThemeMusicTable> {
-  $$ThemeMusicTableAnnotationComposer({
+class $$SongsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SongsTable> {
+  $$SongsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -981,57 +1337,68 @@ class $$ThemeMusicTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get theme =>
-      $composableBuilder(column: $table.theme, builder: (column) => column);
+  GeneratedColumn<String> get themeName =>
+      $composableBuilder(column: $table.themeName, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
 
   GeneratedColumn<String> get filePath =>
       $composableBuilder(column: $table.filePath, builder: (column) => column);
+
+  GeneratedColumn<int> get orderIndex => $composableBuilder(
+      column: $table.orderIndex, builder: (column) => column);
 }
 
-class $$ThemeMusicTableTableManager extends RootTableManager<
+class $$SongsTableTableManager extends RootTableManager<
     _$AppDatabase,
-    $ThemeMusicTable,
-    ThemeMusicData,
-    $$ThemeMusicTableFilterComposer,
-    $$ThemeMusicTableOrderingComposer,
-    $$ThemeMusicTableAnnotationComposer,
-    $$ThemeMusicTableCreateCompanionBuilder,
-    $$ThemeMusicTableUpdateCompanionBuilder,
-    (
-      ThemeMusicData,
-      BaseReferences<_$AppDatabase, $ThemeMusicTable, ThemeMusicData>
-    ),
-    ThemeMusicData,
+    $SongsTable,
+    Song,
+    $$SongsTableFilterComposer,
+    $$SongsTableOrderingComposer,
+    $$SongsTableAnnotationComposer,
+    $$SongsTableCreateCompanionBuilder,
+    $$SongsTableUpdateCompanionBuilder,
+    (Song, BaseReferences<_$AppDatabase, $SongsTable, Song>),
+    Song,
     PrefetchHooks Function()> {
-  $$ThemeMusicTableTableManager(_$AppDatabase db, $ThemeMusicTable table)
+  $$SongsTableTableManager(_$AppDatabase db, $SongsTable table)
       : super(TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$ThemeMusicTableFilterComposer($db: db, $table: table),
+              $$SongsTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$ThemeMusicTableOrderingComposer($db: db, $table: table),
+              $$SongsTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$ThemeMusicTableAnnotationComposer($db: db, $table: table),
+              $$SongsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<int> id = const Value.absent(),
-            Value<String> theme = const Value.absent(),
+            Value<String> themeName = const Value.absent(),
+            Value<String?> title = const Value.absent(),
             Value<String> filePath = const Value.absent(),
+            Value<int> orderIndex = const Value.absent(),
           }) =>
-              ThemeMusicCompanion(
+              SongsCompanion(
             id: id,
-            theme: theme,
+            themeName: themeName,
+            title: title,
             filePath: filePath,
+            orderIndex: orderIndex,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
-            required String theme,
+            required String themeName,
+            Value<String?> title = const Value.absent(),
             required String filePath,
+            Value<int> orderIndex = const Value.absent(),
           }) =>
-              ThemeMusicCompanion.insert(
+              SongsCompanion.insert(
             id: id,
-            theme: theme,
+            themeName: themeName,
+            title: title,
             filePath: filePath,
+            orderIndex: orderIndex,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -1040,20 +1407,17 @@ class $$ThemeMusicTableTableManager extends RootTableManager<
         ));
 }
 
-typedef $$ThemeMusicTableProcessedTableManager = ProcessedTableManager<
+typedef $$SongsTableProcessedTableManager = ProcessedTableManager<
     _$AppDatabase,
-    $ThemeMusicTable,
-    ThemeMusicData,
-    $$ThemeMusicTableFilterComposer,
-    $$ThemeMusicTableOrderingComposer,
-    $$ThemeMusicTableAnnotationComposer,
-    $$ThemeMusicTableCreateCompanionBuilder,
-    $$ThemeMusicTableUpdateCompanionBuilder,
-    (
-      ThemeMusicData,
-      BaseReferences<_$AppDatabase, $ThemeMusicTable, ThemeMusicData>
-    ),
-    ThemeMusicData,
+    $SongsTable,
+    Song,
+    $$SongsTableFilterComposer,
+    $$SongsTableOrderingComposer,
+    $$SongsTableAnnotationComposer,
+    $$SongsTableCreateCompanionBuilder,
+    $$SongsTableUpdateCompanionBuilder,
+    (Song, BaseReferences<_$AppDatabase, $SongsTable, Song>),
+    Song,
     PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
@@ -1061,6 +1425,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$BooksTableTableManager get books =>
       $$BooksTableTableManager(_db, _db.books);
-  $$ThemeMusicTableTableManager get themeMusic =>
-      $$ThemeMusicTableTableManager(_db, _db.themeMusic);
+  $$ThemesTableTableManager get vibes =>
+      $$ThemesTableTableManager(_db, _db.vibes);
+  $$SongsTableTableManager get songs =>
+      $$SongsTableTableManager(_db, _db.songs);
 }

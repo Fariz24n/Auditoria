@@ -1,4 +1,49 @@
 class ChapterParser {
+  /// --------------------------------------------------------------
+  /// 1. DETECT CHAPTERS
+  /// --------------------------------------------------------------
+  /// Mencari pola chapter/Bab/Bagian secara luas.
+  /// Jika tidak ada → treat 1 buku penuh sebagai 1 chapter.
+  static List<Map<String, int>> detectChapters(String text) {
+    final regex = RegExp(
+      r'^\s*(chapter|bab|bagian|prologue|epilogue)\s*\d*.*$',
+      caseSensitive: false,
+      multiLine: true,
+    );
+
+    final matches = regex.allMatches(text);
+    final chapters = <Map<String, int>>[];
+
+    if (matches.isEmpty) {
+      return [
+        {'start': 0, 'end': text.length}
+      ];
+    }
+
+    int? currentStart;
+
+    for (final m in matches) {
+      if (currentStart != null) {
+        chapters.add({'start': currentStart, 'end': m.start});
+      }
+      currentStart = m.start;
+    }
+
+    if (currentStart != null) {
+      chapters.add({'start': currentStart, 'end': text.length});
+    }
+
+    return chapters;
+  }
+
+  /// --------------------------------------------------------------
+  /// 2. CHUNK GENERATOR FOR RAG (HIGH QUALITY)
+  /// --------------------------------------------------------------
+  /// Tujuan:
+  /// - Potong menjadi chunk 400–600 karakter
+  /// - Ada overlap kecil supaya tidak kehilangan konteks
+  /// - Boundary-aware (tidak potong di tengah kata/periode)
+  /// --------------------------------------------------------------
   static List<Map<String, dynamic>> chunkTextForRAG(
     String fullText, {
     int chunkSize = 500,
@@ -6,69 +51,70 @@ class ChapterParser {
     int? chapterIndex,
   }) {
     final chunks = <Map<String, dynamic>>[];
-    
+
     if (fullText.isEmpty) return chunks;
 
     int start = 0;
     int chunkIndex = 0;
 
     while (start < fullText.length) {
-      final end = (start + chunkSize).clamp(0, fullText.length);
-      String chunkText = fullText.substring(start, end);
+      int end = start + chunkSize;
+      if (end > fullText.length) end = fullText.length;
 
-      // Optimasi pemotongan kalimat (Smart Boundary)
+      String section = fullText.substring(start, end);
+
+      // SMART BOUNDARY
       if (end < fullText.length) {
-        final lastPeriod = chunkText.lastIndexOf('.');
-        final lastSpace = chunkText.lastIndexOf(' '); // fallback ke spasi
-        
-        // Prioritaskan titik, lalu spasi, asalkan tidak membuang terlalu banyak teks (>100 char)
-        if (lastPeriod > chunkSize - 100) {
-          chunkText = chunkText.substring(0, lastPeriod + 1);
-        } else if (lastSpace > chunkSize - 100) {
-          chunkText = chunkText.substring(0, lastSpace);
+        final lastPeriod = section.lastIndexOf('.');
+        final lastSpace = section.lastIndexOf(' ');
+
+        if (lastPeriod > chunkSize - 80) {
+          section = section.substring(0, lastPeriod + 1);
+        } else if (lastSpace > chunkSize - 80) {
+          section = section.substring(0, lastSpace);
         }
       }
 
-      final cleanContent = chunkText.trim();
-      if (cleanContent.isNotEmpty) {
-         chunks.add({
-          'content': cleanContent,
+      final cleaned = section.trim();
+      if (cleaned.isNotEmpty) {
+        chunks.add({
+          'content': cleaned,
           'metadata': {
             'chunkIndex': chunkIndex,
             'chapterIndex': chapterIndex ?? 0,
             'startPosition': start,
-            'endPosition': start + chunkText.length,
+            'endPosition': start + cleaned.length,
           },
         });
         chunkIndex++;
       }
 
-      // 🔥 FIX INFINITE LOOP:
-      // Hitung langkah maju. Jika (panjang chunk - overlap) hasilnya <= 0,
-      // kita paksa maju minimal sebesar sisa panjang chunk agar loop selesai.
-      int step = chunkText.length - overlap;
-      if (step <= 0) {
-         step = chunkText.length; // Maju habis jika sisa dikit
-      }
-      
+      // SAFE STEP FOR NO-INFINITE-LOOP
+      int step = cleaned.length - overlap;
+      if (step <= 0) step = cleaned.length;
+
       start += step;
     }
 
     return chunks;
   }
 
-  /// Convert extracted chapters into RAG-ready chunks
+  /// --------------------------------------------------------------
+  /// 3. Convert chapter list → fully chunked content
+  /// --------------------------------------------------------------
   static List<Map<String, dynamic>> chaptersToChunks(
-    List<Map<String, String>> chapters, {
+    List<Map<String, int>> chapters,
+    String fullText, {
     int chunkSize = 500,
     int overlap = 100,
   }) {
-    final allChunks = <Map<String, dynamic>>[];
+    final all = <Map<String, dynamic>>[];
 
-    for (var i = 0; i < chapters.length; i++) {
-      final content = chapters[i]['content'] ?? '';
-      final heading = chapters[i]['heading'] ?? 'Chapter $i';
-      
+    for (int i = 0; i < chapters.length; i++) {
+      final start = chapters[i]['start']!;
+      final end = chapters[i]['end']!;
+      final content = fullText.substring(start, end);
+
       final chapterChunks = chunkTextForRAG(
         content,
         chunkSize: chunkSize,
@@ -76,48 +122,9 @@ class ChapterParser {
         chapterIndex: i,
       );
 
-      // Add chapter heading to metadata
-      for (var chunk in chapterChunks) {
-        chunk['metadata']['chapterHeading'] = heading;
-      }
-
-      allChunks.addAll(chapterChunks);
+      all.addAll(chapterChunks);
     }
 
-    return allChunks;
+    return all;
   }
-
-  static List<Map<String, int>> detectChapters(String text) {
-      final regex = RegExp(
-        r'^\s*(chapter|bab|bagian|prologue|epilogue)\s*\d*.*$', 
-        caseSensitive: false, 
-        multiLine: true,
-      );
-
-      final matches = regex.allMatches(text);
-      final chapters = <Map<String, int>>[];
-
-      if (matches.isEmpty) {
-        // Fallback: Jika tidak ada chapter, anggap 1 buku = 1 chapter
-        return [{'start': 0, 'end': text.length}];
-      }
-
-      int? currentStart;
-      
-      for (final match in matches) {
-        if (currentStart != null) {
-          // Tutup chapter sebelumnya
-          chapters.add({'start': currentStart, 'end': match.start});
-        }
-        currentStart = match.start;
-      }
-      
-      // Tambahkan chapter terakhir (dari match terakhir sampai habis)
-      if (currentStart != null) {
-        chapters.add({'start': currentStart, 'end': text.length});
-      }
-
-      return chapters;
-    }
-
 }

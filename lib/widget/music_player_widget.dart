@@ -21,12 +21,17 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
   late StreamSubscription<String> _themeSub;
   late StreamSubscription<Duration> _posSub;
   late StreamSubscription<Duration?> _durSub;
-  late StreamSubscription _stateSub;
+  late StreamSubscription<PlayerState> _stateSub;
+  late StreamSubscription<List<MusicFile>> _playlistSub;
+  late StreamSubscription<int> _indexSub;
 
   String _currentTheme = 'default';
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _isPlaying = false;
+
+  List<MusicFile> _playlist = [];
+  int _currentIndex = -1;
 
   Timer? _debounce;
 
@@ -34,16 +39,15 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
   void initState() {
     super.initState();
 
-      _themeSub = widget.themeStream.listen((theme) {
-        if (!mounted) return;
+    _themeSub = widget.themeStream.listen((theme) {
+      if (!mounted) return;
 
-        _debounce?.cancel();
-        _debounce = Timer(const Duration(milliseconds: 250), () {
-          if (!mounted) return;
-          setState(() => _currentTheme = theme);
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 250), () {
+        if (!mounted) return;
+        setState(() => _currentTheme = theme);
         });
       });
-
 
     _posSub = widget.musicService.positionStream.listen((pos) {
       if (!mounted) return;
@@ -59,6 +63,16 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
       if (!mounted) return;
       setState(() => _isPlaying = state == PlayerState.playing);
     });
+
+    _playlistSub = widget.musicService.playlistStream.listen((list) {
+      if (!mounted) return;
+      setState(() => _playlist = list);
+    });
+
+    _indexSub = widget.musicService.currentIndexStream.listen((idx) {
+      if (!mounted) return;
+      setState(() => _currentIndex = idx);
+    });
   }
 
   @override
@@ -67,6 +81,8 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     _posSub.cancel();
     _durSub.cancel();
     _stateSub.cancel();
+    _playlistSub.cancel();
+    _indexSub.cancel();
     _debounce?.cancel();
     super.dispose();
   }
@@ -75,6 +91,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
   Widget build(BuildContext context) {
     final themeColor = _getThemeColor();
     final totalMs = _duration.inMilliseconds > 0 ? _duration.inMilliseconds : 1;
+    final currentTitle = (_currentIndex >= 0 && _currentIndex < _playlist.length) ? _playlist[_currentIndex].title : '—';
 
     return Material(
       elevation: 6,
@@ -96,7 +113,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: themeColor.withOpacity(0.12),
+                    color: themeColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -104,14 +121,27 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                       Icon(_getThemeIcon(), size: 16, color: themeColor),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: Text(
-                          _currentTheme,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: themeColor,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _currentTheme,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: themeColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              currentTitle,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: themeColor.withValues(alpha: 0.8),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -119,8 +149,16 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                 ),
                 const Spacer(),
                 IconButton(
+                  icon: const Icon(Icons.skip_previous),
+                  onPressed: _previous,
+                ),
+                IconButton(
                   icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
                   onPressed: _togglePlayPause,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.skip_next),
+                  onPressed: _next,
                 ),
                 IconButton(
                   icon: const Icon(Icons.stop),
@@ -204,16 +242,20 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     if (_isPlaying) {
       await widget.musicService.pause();
     } else {
-      // resume current or play current theme
-      if (widget.musicService.currentTheme != null) {
-        await widget.musicService.resume();
-      } else {
-        await widget.musicService.playTheme(_currentTheme);
-      }
+      // resume current
+      await widget.musicService.resume();
     }
   }
 
   Future<void> _stop() async {
     await widget.musicService.stop();
+  }
+
+  Future<void> _next() async {
+    await widget.musicService.next();
+  }
+
+  Future<void> _previous() async {
+    await widget.musicService.previous();
   }
 }

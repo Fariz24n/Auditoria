@@ -1,4 +1,3 @@
-// lib/screen/pdf_view_screen.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -28,17 +27,24 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
 
   PdfControllerPinch? _pdfController;
   int _lastSavedPage = 0;
-  bool _isOpeningPdf = false;
-  bool _pdfControllerDisposed = false;
+  bool _controllerDisposed = false;
   String? _pdfLoadError;
+  bool _isOpeningPdf = false;
+
+  // 🔥 NEW: UI Debounce
+  Timer? _scrollDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadBook();
 
+    // ============================================================
+    // 🔥 AI Activation Listener
+    // ============================================================
     _aiSub = AiActivationService.instance.onActivationChanged.listen((active) {
       if (!mounted) return;
+
       setState(() => _aiActive = active);
 
       if (!active) {
@@ -46,25 +52,22 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
         return;
       }
 
-      // Defer heavy work so UI can remain responsive.
-      // Use a short delay and ensure we don't call startSession if already running.
+      // 🔥 AI just turned ON → warm up session (NO DOUBLE-CALL)
       Future.delayed(const Duration(milliseconds: 600), () async {
         if (!mounted) return;
         if (book == null || book!.filePath.isEmpty) return;
-        // If not parsed yet, start session with timeout (to avoid infinite block)
-        if (!_reader.hasChapters) {
+
+        if (!_reader.isReady) {
+          // FIRST-TIME START
           try {
             await _reader.startSession(book!.filePath).timeout(
                   const Duration(seconds: 12),
                 );
-          } catch (e) {
-            // Log and fail gracefully; do not throw
-            debugPrint('AI parse timeout/failed: $e');
-          }
+          } catch (_) {}
         } else {
-          // Analyze current visible page, not page 0
-          final currentPage = _pdfController?.page ?? 0;
-          _reader.analyzeAndPlayForPage(currentPage);
+          // If ready, trigger anchor-based analysis
+          final currentPage = _pdfController?.page ?? 1;
+          _reader.onReadingPositionChanged(currentPage);
         }
       });
     });
@@ -75,51 +78,54 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
     _aiSub.cancel();
     _reader.dispose();
     _saveLastPage();
-    
-    if (_pdfController != null && !_pdfControllerDisposed) {
+
+    _scrollDebounce?.cancel();
+
+    if (_pdfController != null && !_controllerDisposed) {
       try {
         _pdfController!.dispose();
-        _pdfControllerDisposed = true;
-      } catch (e) {
-        // Ignore disposal errors
-      }
+      } catch (_) {}
+      _controllerDisposed = true;
     }
+
     super.dispose();
   }
 
+  // ============================================================
+  //  SAVE LAST PAGE
+  // ============================================================
   Future<void> _saveLastPage() async {
-    if (book == null || _pdfController == null || _pdfControllerDisposed) return;
+    if (book == null || _pdfController == null || _controllerDisposed) return;
+
     try {
-      final currentPage = _pdfController!.page;
-      if (currentPage > 0 && currentPage != _lastSavedPage) {
-        await db.updateLastPage(widget.bookId, currentPage);
-        _lastSavedPage = currentPage;
+      final page = _pdfController!.page;
+      if (page > 0 && page != _lastSavedPage) {
+        await db.updateLastPage(widget.bookId, page);
+        _lastSavedPage = page;
       }
-    } catch (e) {
-      // Ignore save errors
-    }
+    } catch (_) {}
   }
 
+  // ============================================================
+  //  LOAD BOOK & OPEN PDF
+  // ============================================================
   Future<void> _loadBook() async {
     if (_isOpeningPdf) return;
 
-    final allBooks = await db.getAllBooks();
-    final match = allBooks.where((b) => b.id == widget.bookId);
+    final books = await db.getAllBooks();
+    final match = books.where((b) => b.id == widget.bookId);
 
     if (match.isEmpty) {
-      setState(() {
-        _pdfLoadError = 'Book not found';
-      });
+      setState(() => _pdfLoadError = 'Book not found');
       return;
     }
 
     book = match.first;
+
     final filePath = book!.filePath;
 
     if (!File(filePath).existsSync()) {
-      setState(() {
-        _pdfLoadError = 'PDF file not found: $filePath';
-      });
+      setState(() => _pdfLoadError = 'PDF file not found: $filePath');
       return;
     }
 
@@ -131,39 +137,53 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
         document: PdfDocument.openFile(filePath),
         initialPage: initialPage > 0 ? initialPage : 1,
       );
-      _lastSavedPage = initialPage;
-      _pdfControllerDisposed = false;
 
+      _lastSavedPage = initialPage;
+      _controllerDisposed = false;
+
+      // Ensure jump landing
       if (initialPage > 0) {
         Future.delayed(const Duration(milliseconds: 350), () {
           if (!mounted || _pdfController == null) return;
           try {
             _pdfController!.jumpToPage(initialPage);
-          } catch (e) {
-            // Ignore jump errors
-          }
+          } catch (_) {}
         });
       }
 
       if (mounted) {
-        setState(() {
-          _pdfLoadError = null;
-        });
+        setState(() => _pdfLoadError = null);
       }
 
     } on PlatformException catch (e) {
-      setState(() {
-        _pdfLoadError = 'Failed to open PDF: ${e.message}';
-      });
+      setState(() => _pdfLoadError = 'Failed to open PDF: ${e.message}');
     } catch (e) {
-      setState(() {
-        _pdfLoadError = 'Failed to open PDF: $e';
-      });
+      setState(() => _pdfLoadError = 'Failed to open PDF: $e');
     } finally {
       _isOpeningPdf = false;
     }
+
+    // ============================================================
+    //  WARMUP AI SESSION once book is opened & ready
+    // ============================================================
+    if (_aiActive) {
+      Future.delayed(const Duration(milliseconds: 800), () async {
+        if (!mounted) return;
+
+        if (!_reader.isReady) {
+          try {
+            await _reader.startSession(book!.filePath).timeout(
+                  const Duration(seconds: 12),
+                );
+          } catch (_) {}
+        }
+      });
+    }
   }
 
+  // ============================================================
+  //  BUILD UI
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -175,15 +195,15 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
               _aiActive ? Icons.memory : Icons.memory_outlined,
               color: _aiActive ? Colors.amber : null,
             ),
-            tooltip: _aiActive ? 'Matikan AI' : 'Aktifkan AI',
+            tooltip: _aiActive ? 'Disable AI' : 'Enable AI',
             onPressed: () {
               AiActivationService.instance.toggle();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
                     AiActivationService.instance.isActive
-                        ? 'Mode AI diaktifkan.'
-                        : 'Mode AI dimatikan.',
+                        ? 'AI Activated.'
+                        : 'AI Deactivated.',
                   ),
                   duration: const Duration(seconds: 2),
                 ),
@@ -218,11 +238,18 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
             PdfViewPinch(
               controller: _pdfController!,
               onPageChanged: (page) {
-                if (_aiActive && _reader.hasChapters) {
-                  _reader.onPageChanged(page);
-                }
+                if (!_aiActive) return;
+
+                // ============================================================
+                // 🔥 UI DEBOUNCE untuk SCROLL CEPAT
+                // ============================================================
+                _scrollDebounce?.cancel();
+                _scrollDebounce = Timer(const Duration(milliseconds: 800), () {
+                  _reader.onReadingPositionChanged(page);
+                });
               },
             ),
+
           if (_aiActive)
             Positioned(
               bottom: 20,

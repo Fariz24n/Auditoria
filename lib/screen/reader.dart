@@ -1,3 +1,4 @@
+// lib/screen/reader.dart
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
@@ -15,61 +16,58 @@ class ReadingSessionManager {
   final MusicService _musicService = MusicService(db);
   final VectorDatabaseService _vectorService = VectorDatabaseService();
 
+  // ====== NEW STATE ======
+  bool isReady = false;             // Apakah indexing sudah selesai
+  int lastAnalyzedPage = -1;        // Halaman terakhir yang sudah dianalisis AI
+  int anchorPage = 0;               // Anchor window
+  int windowSize = 2;               // ±2 page relevansi
+  bool _aiBusy = false;             // Lock concurrency
+  Timer? _readerDebounce;           // Debounce di reader-level
+
   String? _currentDocumentId;
   int _currentPageIndex = 0;
   String? _currentTheme;
-  final Map<int, String> _pageThemeCache = {};
+  final Map<int, String> _pageThemeCache = {}; // Optional cache kecil
 
   final _themeController = StreamController<String>.broadcast();
   Stream<String> get onThemeChanged => _themeController.stream;
 
-  // Expose music service for UI controls
   MusicService get musicService => _musicService;
 
-  // Expose state for UI checks
   bool get hasChapters =>
       _currentDocumentId != null &&
       _vectorService.isDocumentIndexed(_currentDocumentId!);
-  int get currentChapterIndex => _currentPageIndex;
 
-  bool _isBusy = false;
-  bool _isIndexing = false;
-  int? _pendingPage;
-  Timer? _themeDebounceTimer;
   StreamSubscription<bool>? _activationSub;
 
   ReadingSessionManager() {
     _vectorService.initialize();
 
+    // Listener: AI theme → ganti musik
     onThemeChanged.listen((theme) {
       if (AiActivationService.instance.isActive) {
-        _musicService.playTheme(theme);
+        _musicService.setPlaylistByTheme(theme);
       }
     });
 
+    // Listener: AI on/off
     _activationSub =
         AiActivationService.instance.onActivationChanged.listen((active) {
       if (!active) {
         _musicService.stop();
-      } else {
-        if (_currentDocumentId != null && hasChapters) {
-          analyzeAndPlayForPage(_currentPageIndex);
-        }
+        return;
+      }
+      if (isReady) {
+        analyzeAtPosition(_currentPageIndex);
       }
     });
   }
 
-  void onPageChanged(int page) {
-    if (!hasChapters) return;
-
-    if (page != _currentPageIndex) {
-      _currentPageIndex = page;
-      analyzeAndPlayForPage(page);
-    }
-  }
-
+  // ================================================================
+  // START SESSION — INDEX PDF ONCE
+  // ================================================================
   Future<void> startSession(String pdfPath) async {
-    if (_isIndexing) return; // Prevent double indexing
+    if (isReady) return;
 
     _currentTheme = 'default';
     _themeController.add('default');
@@ -77,203 +75,162 @@ class ReadingSessionManager {
     _currentDocumentId = pdfPath.hashCode.toString();
 
     if (!_vectorService.isDocumentIndexed(_currentDocumentId!)) {
-      _isIndexing = true;
       try {
-        await _indexPdfAndStream(pdfPath);
+        await _indexPdf(pdfPath);
       } catch (e) {
-        log('Failed to index document: $e');
-        _emitTheme('error');
+        log('Indexing failed: $e');
+        _emitTheme('default');
         return;
-      } finally {
-        _isIndexing = false;
       }
     }
 
-    if (hasChapters && AiActivationService.instance.isActive) {
-      await analyzeAndPlayForPage(_currentPageIndex);
+    isReady = true;
+    anchorPage = 1;
+    lastAnalyzedPage = -1;
+
+    if (AiActivationService.instance.isActive) {
+      analyzeAtPosition(_currentPageIndex);
     }
   }
 
-  // ------------------------------
-  // NEW FUNCTIONS BELOW
-  // ------------------------------
-
-  /// Extract full text from PDF (no chunking)
-  static Future<String> _parsePdfTextOnly(String path) async {
-    final fileBytes = await File(path).readAsBytes();
-    final document = PdfDocument(inputBytes: fileBytes);
-    final text = PdfTextExtractor(document).extractText();
-    document.dispose();
+  // ================================================================
+  // PDF TEXT EXTRACTION
+  // ================================================================
+  static Future<String> _extractPdfText(String path) async {
+    final bytes = await File(path).readAsBytes();
+    final doc = PdfDocument(inputBytes: bytes);
+    final text = PdfTextExtractor(doc).extractText();
+    doc.dispose();
     return text;
   }
 
-  /// Worker isolate for chunking
-  static List<Map<String, dynamic>> _chunkWorker(
-      Map<String, dynamic> params) {
-    final text = params['text'] as String;
-    const maxChunkLength = 500;
-    final startOffset = params['globalIndexStart'] as int;
+  // ================================================================
+  // INDEX PDF — BUT ONLY ONCE
+  // ================================================================
+  Future<void> _indexPdf(String pdfPath) async {
+    final fullText = await compute(_extractPdfText, pdfPath);
 
-    final chunks = <Map<String, dynamic>>[];
-    int index = 0;
+    final chapters = ChapterParser.detectChapters(fullText);
+    int globalIndex = 0;
 
-    while (index < text.length) {
-      var end = index + maxChunkLength;
+    for (final c in chapters) {
+      final segment = fullText.substring(c['start']!, c['end']!);
+      if (segment.trim().length < 40) continue;
 
-      if (end < text.length) {
-        final lastSpace = text.lastIndexOf(' ', end);
-        if (lastSpace > index && lastSpace > end - 50) {
-          end = lastSpace;
-        }
-      } else {
-        end = text.length;
+      final chunks = ChapterParser.chunkTextForRAG(
+        segment,
+        chapterIndex: globalIndex,
+      );
+
+      globalIndex += chunks.length;
+
+      if (chunks.isNotEmpty) {
+        await _vectorService.indexDocumentBatch(
+          _currentDocumentId!,
+          chunks,
+        );
       }
-
-      final content = text.substring(index, end).trim();
-      if (content.isNotEmpty) {
-        chunks.add({
-          'content': content,
-          'index': startOffset + chunks.length,
-          'metadata': {'type': 'text'},
-        });
-      }
-
-      index = end;
     }
 
-    return chunks;
+    log('Indexing complete with $globalIndex chunks.');
   }
 
-  /// Streamed, chapter-based PDF indexer
-  Future<void> _indexPdfAndStream(String pdfPath) async {
-    try {
-      final fullText = await compute(_parsePdfTextOnly, pdfPath);
-      if (fullText.isEmpty) return;
+  // ================================================================
+  // SMART READING POSITION API
+  // Called from UI (debounced on UI layer)
+  // ================================================================
+  void onReadingPositionChanged(int page) {
+    if (!isReady) return;
+    if (!AiActivationService.instance.isActive) return;
 
-      final chapters = ChapterParser.detectChapters(fullText);
-      log('Detected ${chapters.length} chapters');
+    _currentPageIndex = page;
 
-      int globalIndex = 0;
-
-      for (final chapter in chapters) {
-        final text = fullText.substring(chapter['start']!, chapter['end']!);
-        if (text.trim().length < 50) continue;
-
-        final chunks = await compute(_chunkWorker, {
-          'text': text,
-          'globalIndexStart': globalIndex,
-        });
-
-        globalIndex += chunks.length;
-
-        if (chunks.isNotEmpty) {
-          await _vectorService.indexDocumentBatch(
-              _currentDocumentId!, chunks);
-        }
-
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-
-      log('Indexing complete. Total chunks: $globalIndex');
-    } catch (e) {
-      log('Indexing error: $e');
-      _emitTheme('error');
-    }
+    // Reader-level debounce 500ms
+    _readerDebounce?.cancel();
+    _readerDebounce = Timer(const Duration(milliseconds: 500), () {
+      analyzeAtPosition(page);
+    });
   }
 
-  // ------------------------------
-  // END OF NEW FUNCTIONS
-  // ------------------------------
+  // ================================================================
+  // CORE AI-TRIGGER LOGIC
+  // ================================================================
+  Future<void> analyzeAtPosition(int page) async {
+    if (!isReady) return;
 
-  Future<void> analyzeAndPlayForPage(int pageIndex) async {
-    if (!hasChapters) return;
-
-    if (_isBusy) {
-      _pendingPage = pageIndex;
+    // 1) Window check
+    if ((page - anchorPage).abs() <= windowSize) {
       return;
     }
 
-    // Check cache first
-    if (_pageThemeCache.containsKey(pageIndex)) {
-      final cachedTheme = _pageThemeCache[pageIndex]!;
-      if (cachedTheme != _currentTheme) {
-        _currentTheme = cachedTheme;
-        _emitTheme(cachedTheme);
-        await _musicService.playTheme(cachedTheme);
-      }
-      return;
-    }
+    // 2) Prevent spam if same page
+    if (page == lastAnalyzedPage) return;
 
-    _isBusy = true;
+    // 3) Concurrency lock
+    if (_aiBusy) return;
+    _aiBusy = true;
 
     try {
-      if (!AiActivationService.instance.isActive) {
-        _currentPageIndex = pageIndex;
-        return;
-      }
+      lastAnalyzedPage = page;
 
       final query =
-          'Analyze the emotional theme or narrative mood of the content on page $pageIndex';
+          'Determine the emotional or narrative theme for this segment near page $page';
 
-      final relevantChunks = await _vectorService.retrieveRelevantContext(
+      final chunks = await _vectorService.retrieveRelevantContext(
         query,
         topK: 5,
         documentId: _currentDocumentId,
       );
 
-      if (relevantChunks.isEmpty) {
+      if (chunks.isEmpty) {
         _emitTheme('default');
-        _pageThemeCache[pageIndex] = 'default';
+        anchorPage = page;
         return;
       }
 
       final contextText =
-          relevantChunks.map((c) => c['content']).join('\n\n');
-      final theme =
-          await _analyzer.getThemeFromContext(contextText, query);
+          chunks.map((c) => c['content']).join('\n\n');
 
-      final resultTheme = theme ?? 'default';
-      if (resultTheme != _currentTheme) {
-        _currentTheme = resultTheme;
-        _emitTheme(resultTheme);
+      final theme = await _analyzer.getThemeFromContext(
+        contextText,
+        query,
+      );
+
+      final finalTheme = theme ?? 'default';
+
+      if (finalTheme != _currentTheme) {
+        _currentTheme = finalTheme;
+        _emitTheme(finalTheme);
       }
 
-      _pageThemeCache[pageIndex] = resultTheme;
-      _currentPageIndex = pageIndex;
+      anchorPage = page;
     } catch (e) {
-      log('Error analyzing page: $e');
+      log('AI error: $e');
       _emitTheme('default');
     } finally {
-      _isBusy = false;
-
-      if (_pendingPage != null) {
-        final nextPage = _pendingPage!;
-        _pendingPage = null;
-        analyzeAndPlayForPage(nextPage);
-      }
+      _aiBusy = false;
     }
   }
 
+  // ================================================================
+  // THROTTLED THEME EMITTER
+  // ================================================================
+  Timer? _themeDebounce;
   void _emitTheme(String theme) {
-    _themeDebounceTimer?.cancel();
-    _themeDebounceTimer =
+    _themeDebounce?.cancel();
+    _themeDebounce =
         Timer(const Duration(milliseconds: 250), () {
       _themeController.add(theme);
     });
-  }
-
-  @Deprecated('Use analyzeAndPlayForPage instead')
-  Future<void> analyzeAndPlayChapter(int index) async {
-    await analyzeAndPlayForPage(index);
   }
 
   void stopMusic() => _musicService.stop();
 
   void dispose() {
     _activationSub?.cancel();
-    _themeDebounceTimer?.cancel();
+    _readerDebounce?.cancel();
+    _themeDebounce?.cancel();
     _themeController.close();
-    stopMusic();
 
     if (_currentDocumentId != null) {
       _vectorService.clearDocument(_currentDocumentId!);
