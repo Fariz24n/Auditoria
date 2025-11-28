@@ -67,7 +67,17 @@ class MusicService {
 
   // Set playlist based on theme name (fetch from DB)
   Future<void> setPlaylistByTheme(String theme, {int startIndex = 0}) async {
+    debugPrint("MusicService: Mencari lagu untuk tema '$theme'...");
     final songs = await db.getSongsByThemeName(theme);
+
+    if (songs.isEmpty) {
+          debugPrint('MusicService: Lagu Kosong untuk tema $theme');
+          // Jangan lupa update UI bahwa playlist kosong
+          _playlist = [];
+          _playlistCtl.add(_playlist);
+          await stop();
+          return;
+        }
     final files = songs.map((s) => MusicFile(
       id: s.id,
       themeId: null,
@@ -75,7 +85,8 @@ class MusicService {
       path: s.filePath,
       durationMs: null,
     )).toList();
-
+    debugPrint("MusicService: Ditemukan ${files.length} lagu. Memulai player...");
+    
     if (files.isEmpty) {
       debugPrint('No songs found for theme $theme');
       _playlist = [];

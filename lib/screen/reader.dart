@@ -32,9 +32,6 @@ class ReadingSessionManager {
     // Listener: AI on/off
     _activationSub =
         AiActivationService.instance.onActivationChanged.listen((active) {
-      if (!active) {
-        _musicService.stop();
-      }
     });
   }
 
@@ -116,7 +113,7 @@ class ReadingSessionManager {
     return {'start': start, 'end': end};
   }
 
-  // ================================================================
+// ================================================================
   // PDF TEXT EXTRACTION (Specific Pages Only)
   // ================================================================
   static Future<String> _extractPagesText(Map<String, dynamic> params) async {
@@ -139,7 +136,22 @@ class ReadingSessionManager {
       }
 
       doc.dispose();
-      return buffer.toString();
+
+      // --- 🔥 DEBUG LOG (SUKSES) ---
+      final result = buffer.toString();
+      
+      debugPrint("=== PDF DEBUG ===");
+      debugPrint("Page Range: $startPage - $endPage");
+      debugPrint("Total Text Length: ${result.length}");
+      
+      // Ambil 100 karakter pertama dengan aman (cek panjang dulu biar gak error)
+      final preview = result.length > 100 ? result.substring(0, 100) : result;
+      // Ganti enter dengan spasi biar log rapi
+      debugPrint("Preview Text: ${preview.replaceAll('\n', ' ')}"); 
+      debugPrint("=================");
+
+      return result; // Kembalikan teks asli
+
     } catch (e) {
       debugPrint('PDF extraction error: $e');
       return '';

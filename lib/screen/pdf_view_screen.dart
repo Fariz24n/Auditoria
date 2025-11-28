@@ -42,27 +42,59 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
     _reader = ReadingSessionManager(router.musicService);
     _loadBook();
 
-    // ============================================================
-    // 🔥 AI Activation Listener
-    // ============================================================
+    // ------------------------------------------------------------
+    // 1. Listener Tombol AI (ON/OFF)
+    // ------------------------------------------------------------
     _aiSub = AiActivationService.instance.onActivationChanged.listen((active) {
       if (!mounted) return;
 
       setState(() => _aiActive = active);
 
+      // ⚠️ PERHATIAN: HAPUS BAGIAN INI jika Anda mau musik TETAP JALAN
+      // setelah AI otomatis mati.
+      /*
       if (!active) {
-        _reader.stopMusic();
+        _reader.stopMusic(); // <--- KOMENTARI/HAPUS BARIS INI
         return;
       }
+      */
+      // Sebagai gantinya, jika mati, biarkan saja (jangan panggil stopMusic)
 
-      // 🔥 AI just turned ON → analyze current page immediately
-      if (book != null && book!.filePath.isNotEmpty) {
+      // Logika jika AI baru saja dinyalakan
+      if (active && book != null && book!.filePath.isNotEmpty) {
         final currentPage = _pdfController?.page ?? 1;
         _reader.analyzeCurrentPages(book!.filePath, currentPage);
       }
     });
-  }
 
+    // ------------------------------------------------------------
+    // 2. 🔥 Listener Hasil Analisis Tema (TARUH DISINI)
+    // ------------------------------------------------------------
+    // Ini mendengarkan kapan saja AI selesai berpikir dan mengirim tema.
+    _reader.onThemeChanged.listen((theme) {
+      if (!mounted) return;
+
+      // Tampilkan Notifikasi Debugging
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              // Tampilkan tema yang didapat untuk memastikan data sampai
+              Expanded(child: Text("AI Selesai! Tema: '$theme'. Memutar musik...")),
+            ],
+          ),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      
+      debugPrint("DEBUG UI: Tema '$theme' diterima di View.");
+    });
+  }
+  
   @override
   void dispose() {
     _aiSub.cancel();

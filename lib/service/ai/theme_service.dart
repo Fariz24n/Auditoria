@@ -6,6 +6,15 @@ import 'package:flutter/material.dart';
 class ThemeAnalyzer {
   late final GenerativeModel _model;
 
+  // Daftar tema yang dikenali oleh MusicService & UI Anda
+  static const List<String> _validThemes = [
+    'happy', 
+    'calming', 
+    'thrill', 
+    'melancholic', 
+    'battle'
+  ];
+
   ThemeAnalyzer() {
     final apiKey = dotenv.env['GEMINI_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
@@ -25,50 +34,64 @@ class ThemeAnalyzer {
     );
   }
 
-  /// Analyze theme using RAG-retrieved context (grounded generation)
-/// Analyze theme using RAG-retrieved context (grounded generation)
   Future<String?> getThemeFromContext(
     String contextText,
     String query,
   ) async {
     if (contextText.trim().isEmpty) return 'default';
 
+    // 🔥 FIX 2: Pertegas Prompt dengan Daftar Tema Valid
     final prompt = '''
-Your task is to analyze the emotional or narrative theme based STRICTLY on the following context only.
-QUERY: $query
-CONTEXT:
-$contextText
-INSTRUCTIONS:
-1. Return JSON format: {"theme": "theme_name", "confidence": 0.0-1.0}
-(Rest of instructions implied...)
-''';
+    Analyze the narrative context provided below and determine the most appropriate emotional theme/atmosphere.
+    
+    CONTEXT:
+    $contextText
+    
+    INSTRUCTIONS:
+    1. You must choose ONE theme strictly from this list: ${_validThemes.join(', ')}.
+    2. If the text is neutral or unclear, choose 'calming'.
+    3. Return JSON format: {"theme": "selected_theme", "confidence": 0.0-1.0}
+    4. Confidence Score Guide:
+       - 0.9: Explicit keywords (e.g., "tears", "blood", "laugh").
+       - 0.6: Implied atmosphere.
+    ''';
 
     try {
+      debugPrint("ThemeAnalyzer: Sending to Gemini..."); // Debug Log
       final response = await _model.generateContent([Content.text(prompt)]);
-      // 🔥 FIX 1: Gunakan Safe JSON Parsing
+      
+      debugPrint("ThemeAnalyzer Raw Response: ${response.text}"); // 🔥 WAJIB LIHAT INI DI LOG
+
       final jsonResult = _safeJsonDecode(response.text);
       
       final theme = jsonResult['theme'] as String?;
       final confidence = (jsonResult['confidence'] as num?)?.toDouble() ?? 0.0;
 
-      if (confidence < 0.8 || theme == null || theme.isEmpty) {
+      // 🔥 FIX 1: Turunkan Threshold Confidence ke 0.5 atau 0.6
+      // Lebih baik musik main (meski agak meleset) daripada 'default' terus.
+      if (confidence < 0.5) { 
+        debugPrint("ThemeAnalyzer: Confidence too low ($confidence). Using default.");
         return 'default';
       }
-      return theme;
+
+      if (theme == null || !_validThemes.contains(theme.toLowerCase())) {
+        debugPrint("ThemeAnalyzer: Invalid theme '$theme'. Using default.");
+        return 'default';
+      }
+
+      return theme.toLowerCase();
+
     } catch (e) {
       debugPrint('ThemeAnalyzer Error: $e');
       return 'default';
     }
   }
 
-  // 🔥 SISIPKAN DI BAGIAN PALING BAWAH CLASS (Sebelum penutup kurawal '}')
   Map<String, dynamic> _safeJsonDecode(String? text) {
     if (text == null) return {};
     try {
-      // Coba decode langsung
       return jsonDecode(text);
     } catch (_) {
-      // Fallback: Cari pola JSON object {...}
       final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(text);
       if (match != null) {
         try {
@@ -79,14 +102,5 @@ INSTRUCTIONS:
       }
       return {};
     }
-  }
-
-  /// Legacy method - kept for backward compatibility
-  @Deprecated('Use getThemeFromContext instead')
-  Future<String?> getTheme(String chapterText) async {
-    return getThemeFromContext(
-      chapterText,
-      'Analyze the emotional theme of this text',
-    );
   }
 }

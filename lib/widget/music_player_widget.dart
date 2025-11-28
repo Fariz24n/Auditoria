@@ -1,3 +1,4 @@
+// lib/widget/music_player_widget.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -18,68 +19,58 @@ class MusicPlayerWidget extends StatefulWidget {
 }
 
 class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
+  // StreamSubscriptions
   late StreamSubscription<String> _themeSub;
-  late StreamSubscription<Duration> _posSub;
-  late StreamSubscription<Duration?> _durSub;
   late StreamSubscription<PlayerState> _stateSub;
   late StreamSubscription<List<MusicFile>> _playlistSub;
   late StreamSubscription<int> _indexSub;
 
+  // State Variables
   String _currentTheme = 'default';
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
   bool _isPlaying = false;
-
   List<MusicFile> _playlist = [];
   int _currentIndex = -1;
-
   Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
 
+    // 1. Theme Listener (Debounced)
     _themeSub = widget.themeStream.listen((theme) {
       if (!mounted) return;
-
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: 250), () {
         if (!mounted) return;
         setState(() => _currentTheme = theme);
-        });
       });
-
-    _posSub = widget.musicService.positionStream.listen((pos) {
-      if (!mounted) return;
-      setState(() => _position = pos);
     });
 
-    _durSub = widget.musicService.durationStream.listen((dur) {
-      if (!mounted) return;
-      setState(() => _duration = dur ?? Duration.zero);
-    });
-
+    // 2. Player State Listener
     _stateSub = widget.musicService.playerStateStream.listen((state) {
       if (!mounted) return;
       setState(() => _isPlaying = state == PlayerState.playing);
     });
 
+    // 3. Playlist Listener
     _playlistSub = widget.musicService.playlistStream.listen((list) {
       if (!mounted) return;
       setState(() => _playlist = list);
     });
 
+    // 4. Index Listener
     _indexSub = widget.musicService.currentIndexStream.listen((idx) {
       if (!mounted) return;
       setState(() => _currentIndex = idx);
     });
+
+    // CATATAN: Kami MENGHAPUS _posSub dan _durSub dari sini
+    // untuk mencegah setState() dipanggil 60x per detik yang bikin freeze.
   }
 
   @override
   void dispose() {
     _themeSub.cancel();
-    _posSub.cancel();
-    _durSub.cancel();
     _stateSub.cancel();
     _playlistSub.cancel();
     _indexSub.cancel();
@@ -90,8 +81,9 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
   @override
   Widget build(BuildContext context) {
     final themeColor = _getThemeColor();
-    final totalMs = _duration.inMilliseconds > 0 ? _duration.inMilliseconds : 1;
-    final currentTitle = (_currentIndex >= 0 && _currentIndex < _playlist.length) ? _playlist[_currentIndex].title : '—';
+    final currentTitle = (_currentIndex >= 0 && _currentIndex < _playlist.length)
+        ? _playlist[_currentIndex].title
+        : 'Select Theme / Play Music';
 
     return Material(
       elevation: 6,
@@ -106,12 +98,12 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // --- HEADER: Theme Info & Controls ---
             Row(
               children: [
-                // Theme badge
+                // Theme Badge
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: themeColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -125,21 +117,21 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _currentTheme,
+                              _currentTheme.toUpperCase(),
                               style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                                 color: themeColor,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               currentTitle,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: themeColor.withValues(alpha: 0.8),
                               ),
                               overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ],
                         ),
@@ -148,49 +140,82 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
                   ),
                 ),
                 const Spacer(),
+                // Controls
                 IconButton(
                   icon: const Icon(Icons.skip_previous),
-                  onPressed: _previous,
+                  onPressed: () => widget.musicService.previous(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  iconSize: 20,
                 ),
+                const SizedBox(width: 8),
                 IconButton(
-                  icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                  icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
                   onPressed: _togglePlayPause,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  iconSize: 32, // Play button lebih besar
+                  color: themeColor,
                 ),
+                const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.skip_next),
-                  onPressed: _next,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.stop),
-                  onPressed: _stop,
+                  onPressed: () => widget.musicService.next(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  iconSize: 20,
                 ),
               ],
             ),
 
-            // Slider
-            Row(
-              children: [
-                Text(_formatDuration(_position),
-                    style: const TextStyle(fontSize: 11)),
-                Expanded(
-                  child: Slider(
-                    value:
-                        _position.inMilliseconds.clamp(0, totalMs).toDouble(),
-                    max: totalMs.toDouble(),
-                    onChanged: (v) {
-                      setState(() {
-                        _position = Duration(milliseconds: v.toInt());
-                      });
-                    },
-                    onChangeEnd: (v) async {
-                      await widget.musicService
-                          .seek(Duration(milliseconds: v.toInt()));
-                    },
-                  ),
-                ),
-                Text(_formatDuration(_duration),
-                    style: const TextStyle(fontSize: 11)),
-              ],
+            const SizedBox(height: 4),
+
+            // --- PROGRESS BAR (OPTIMIZED) ---
+            // Menggunakan StreamBuilder agar hanya bagian Slider yang rebuild
+            StreamBuilder<Duration>(
+              stream: widget.musicService.positionStream,
+              builder: (context, snapshotPos) {
+                final position = snapshotPos.data ?? Duration.zero;
+                
+                return StreamBuilder<Duration?>(
+                  stream: widget.musicService.durationStream,
+                  builder: (context, snapshotDur) {
+                    final duration = snapshotDur.data ?? Duration.zero;
+                    final totalMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : 1;
+                    final currentMs = position.inMilliseconds.clamp(0, totalMs).toDouble();
+
+                    return Row(
+                      children: [
+                        Text(_formatDuration(position), 
+                             style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackHeight: 2,
+                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                            ),
+                            child: Slider(
+                              value: currentMs,
+                              max: totalMs.toDouble(),
+                              activeColor: themeColor,
+                              inactiveColor: themeColor.withValues(alpha: 0.2),
+                              onChanged: (v) {
+                                // Opsional: Implementasi seek preview
+                              },
+                              onChangeEnd: (v) {
+                                widget.musicService.seek(Duration(milliseconds: v.toInt()));
+                              },
+                            ),
+                          ),
+                        ),
+                        Text(_formatDuration(duration), 
+                             style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    );
+                  }
+                );
+              },
             ),
           ],
         ),
@@ -206,35 +231,23 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
 
   Color _getThemeColor() {
     switch (_currentTheme) {
-      case 'happy':
-        return Colors.amber;
-      case 'calming':
-        return Colors.blue;
-      case 'thrill':
-        return Colors.red;
-      case 'melancholic':
-        return Colors.indigo;
-      case 'battle':
-        return Colors.deepOrange;
-      default:
-        return Colors.grey;
+      case 'happy': return Colors.amber;
+      case 'calming': return Colors.blue;
+      case 'thrill': return Colors.red;
+      case 'melancholic': return Colors.indigo;
+      case 'battle': return Colors.deepOrange;
+      default: return Colors.grey;
     }
   }
 
   IconData _getThemeIcon() {
     switch (_currentTheme) {
-      case 'happy':
-        return Icons.sentiment_very_satisfied;
-      case 'calming':
-        return Icons.spa;
-      case 'thrill':
-        return Icons.flash_on;
-      case 'melancholic':
-        return Icons.cloud;
-      case 'battle':
-        return Icons.whatshot;
-      default:
-        return Icons.music_note;
+      case 'happy': return Icons.sentiment_very_satisfied;
+      case 'calming': return Icons.spa;
+      case 'thrill': return Icons.flash_on;
+      case 'melancholic': return Icons.cloud;
+      case 'battle': return Icons.whatshot;
+      default: return Icons.music_note;
     }
   }
 
@@ -242,20 +255,7 @@ class _MusicPlayerWidgetState extends State<MusicPlayerWidget> {
     if (_isPlaying) {
       await widget.musicService.pause();
     } else {
-      // resume current
       await widget.musicService.resume();
     }
-  }
-
-  Future<void> _stop() async {
-    await widget.musicService.stop();
-  }
-
-  Future<void> _next() async {
-    await widget.musicService.next();
-  }
-
-  Future<void> _previous() async {
-    await widget.musicService.previous();
   }
 }
