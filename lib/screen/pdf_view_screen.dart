@@ -8,6 +8,7 @@ import '../service/database_instance.dart';
 import '../service/ai/ai_activation.dart';
 import '../screen/reader.dart';
 import '../widget/music_player_widget.dart';
+import '../service/app_router.dart' as router;
 
 class PdfViewScreen extends StatefulWidget {
   final int bookId;
@@ -20,10 +21,11 @@ class PdfViewScreen extends StatefulWidget {
 
 class _PdfViewScreenState extends State<PdfViewScreen> {
   Book? book;
-  final _reader = ReadingSessionManager();
+  late final ReadingSessionManager _reader;
 
   late StreamSubscription<bool> _aiSub;
   bool _aiActive = AiActivationService.instance.isActive;
+  bool _showMusicWidget = true;
 
   PdfControllerPinch? _pdfController;
   int _lastSavedPage = 0;
@@ -37,6 +39,7 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
   @override
   void initState() {
     super.initState();
+    _reader = ReadingSessionManager(router.musicService);
     _loadBook();
 
     // ============================================================
@@ -52,20 +55,13 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
         return;
       }
 
-      // 🔥 AI just turned ON → warm up session (NO DOUBLE-CALL)
-      Future.delayed(const Duration(milliseconds: 600), () async {
-        if (!mounted) return;
-        if (book == null || book!.filePath.isEmpty) return;
-
+      // 🔥 AI just turned ON → warm up session (NON-BLOCKING)
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted || book == null || book!.filePath.isEmpty) return;
+        
         if (!_reader.isReady) {
-          // FIRST-TIME START
-          try {
-            await _reader.startSession(book!.filePath).timeout(
-                  const Duration(seconds: 12),
-                );
-          } catch (_) {}
+          _reader.startSession(book!.filePath);
         } else {
-          // If ready, trigger anchor-based analysis
           final currentPage = _pdfController?.page ?? 1;
           _reader.onReadingPositionChanged(currentPage);
         }
@@ -166,17 +162,10 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
     // ============================================================
     //  WARMUP AI SESSION once book is opened & ready
     // ============================================================
-    if (_aiActive) {
-      Future.delayed(const Duration(milliseconds: 800), () async {
-        if (!mounted) return;
-
-        if (!_reader.isReady) {
-          try {
-            await _reader.startSession(book!.filePath).timeout(
-                  const Duration(seconds: 12),
-                );
-          } catch (_) {}
-        }
+    if (_aiActive && book != null) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted || _reader.isReady) return;
+        _reader.startSession(book!.filePath);
       });
     }
   }
@@ -190,6 +179,17 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
       appBar: AppBar(
         title: Text(book?.title ?? 'PDF Viewer'),
         actions: [
+          if (_aiActive)
+            IconButton(
+              icon: Icon(
+                _showMusicWidget ? Icons.music_note : Icons.music_off,
+                color: _showMusicWidget ? Colors.green : null,
+              ),
+              tooltip: _showMusicWidget ? 'Hide Music Player' : 'Show Music Player',
+              onPressed: () {
+                setState(() => _showMusicWidget = !_showMusicWidget);
+              },
+            ),
           IconButton(
             icon: Icon(
               _aiActive ? Icons.memory : Icons.memory_outlined,
@@ -250,14 +250,16 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
               },
             ),
 
-          if (_aiActive)
+          if (_aiActive && _showMusicWidget)
             Positioned(
               bottom: 20,
               left: 0,
               right: 0,
-              child: MusicPlayerWidget(
-                musicService: _reader.musicService,
-                themeStream: _reader.onThemeChanged,
+              child: Center(
+                child: MusicPlayerWidget(
+                  musicService: _reader.musicService,
+                  themeStream: _reader.onThemeChanged,
+                ),
               ),
             ),
         ],

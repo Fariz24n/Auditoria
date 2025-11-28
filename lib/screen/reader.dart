@@ -9,11 +9,10 @@ import '../service/ai/vector_database_service.dart';
 import '../service/music_service.dart';
 import '../service/ai/ai_activation.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-import '../service/database_instance.dart';
 
 class ReadingSessionManager {
   final ThemeAnalyzer _analyzer = ThemeAnalyzer();
-  final MusicService _musicService = MusicService(db);
+  final MusicService _musicService;
   final VectorDatabaseService _vectorService = VectorDatabaseService();
 
   // ====== NEW STATE ======
@@ -27,7 +26,6 @@ class ReadingSessionManager {
   String? _currentDocumentId;
   int _currentPageIndex = 0;
   String? _currentTheme;
-  final Map<int, String> _pageThemeCache = {}; // Optional cache kecil
 
   final _themeController = StreamController<String>.broadcast();
   Stream<String> get onThemeChanged => _themeController.stream;
@@ -40,7 +38,7 @@ class ReadingSessionManager {
 
   StreamSubscription<bool>? _activationSub;
 
-  ReadingSessionManager() {
+  ReadingSessionManager(this._musicService) {
     _vectorService.initialize();
 
     // Listener: AI theme → ganti musik
@@ -64,7 +62,7 @@ class ReadingSessionManager {
   }
 
   // ================================================================
-  // START SESSION — INDEX PDF ONCE
+  // START SESSION — INDEX PDF ONCE (NON-BLOCKING)
   // ================================================================
   Future<void> startSession(String pdfPath) async {
     if (isReady) return;
@@ -74,21 +72,23 @@ class ReadingSessionManager {
 
     _currentDocumentId = pdfPath.hashCode.toString();
 
-    if (!_vectorService.isDocumentIndexed(_currentDocumentId!)) {
-      try {
-        await _indexPdf(pdfPath);
-      } catch (e) {
-        log('Indexing failed: $e');
-        _emitTheme('default');
-        return;
-      }
-    }
-
+    // Mark as ready immediately so UI doesn't freeze
     isReady = true;
     anchorPage = 1;
     lastAnalyzedPage = -1;
 
-    if (AiActivationService.instance.isActive) {
+    // Index in background without blocking
+    if (!_vectorService.isDocumentIndexed(_currentDocumentId!)) {
+      _indexPdf(pdfPath).then((_) {
+        log('Background indexing complete');
+        if (AiActivationService.instance.isActive) {
+          analyzeAtPosition(_currentPageIndex);
+        }
+      }).catchError((e) {
+        log('Indexing failed: $e');
+        _emitTheme('error');
+      });
+    } else if (AiActivationService.instance.isActive) {
       analyzeAtPosition(_currentPageIndex);
     }
   }
@@ -105,34 +105,58 @@ class ReadingSessionManager {
   }
 
   // ================================================================
-  // INDEX PDF — BUT ONLY ONCE
+  // INDEX PDF — COMPLETELY NON-BLOCKING
   // ================================================================
-  Future<void> _indexPdf(String pdfPath) async {
-    final fullText = await compute(_extractPdfText, pdfPath);
+  Future<void> _indexPdf(String pdfPath) {
+    log('Starting background indexing...');
+    
+    // Extract text in isolate, then process WITHOUT blocking
+    return compute(_extractPdfText, pdfPath).then((fullText) {
+      final chapters = ChapterParser.detectChapters(fullText);
+      
+      // Process all chapters sequentially but non-blocking
+      return _indexChaptersSequentially(chapters, fullText, 0);
+    });
+  }
 
-    final chapters = ChapterParser.detectChapters(fullText);
-    int globalIndex = 0;
-
-    for (final c in chapters) {
-      final segment = fullText.substring(c['start']!, c['end']!);
-      if (segment.trim().length < 40) continue;
-
-      final chunks = ChapterParser.chunkTextForRAG(
-        segment,
-        chapterIndex: globalIndex,
-      );
-
-      globalIndex += chunks.length;
-
-      if (chunks.isNotEmpty) {
-        await _vectorService.indexDocumentBatch(
-          _currentDocumentId!,
-          chunks,
-        );
-      }
+  // Helper: Index chapters one by one without blocking
+  Future<void> _indexChaptersSequentially(
+    List<Map<String, int>> chapters,
+    String fullText,
+    int chapterIdx,
+  ) {
+    if (chapterIdx >= chapters.length) {
+      log('Background indexing complete');
+      return Future.value();
     }
 
-    log('Indexing complete with $globalIndex chunks.');
+    final c = chapters[chapterIdx];
+    final segment = fullText.substring(c['start']!, c['end']!);
+    
+    if (segment.trim().length < 40) {
+      return _indexChaptersSequentially(chapters, fullText, chapterIdx + 1);
+    }
+
+    final chunks = ChapterParser.chunkTextForRAG(
+      segment,
+      chapterIndex: chapterIdx,
+    );
+
+    if (chunks.isEmpty) {
+      return _indexChaptersSequentially(chapters, fullText, chapterIdx + 1);
+    }
+
+    // Index this batch, then move to next chapter
+    return _vectorService.indexDocumentBatch(
+      _currentDocumentId!,
+      chunks,
+    ).then((_) {
+      return _indexChaptersSequentially(chapters, fullText, chapterIdx + 1);
+    }).catchError((e) {
+      log('Chapter $chapterIdx indexing failed: $e');
+      // Continue with next chapter even if one fails
+      return _indexChaptersSequentially(chapters, fullText, chapterIdx + 1);
+    });
   }
 
   // ================================================================
@@ -153,7 +177,7 @@ class ReadingSessionManager {
   }
 
   // ================================================================
-  // CORE AI-TRIGGER LOGIC
+  // CORE AI-TRIGGER LOGIC (NON-BLOCKING WITH TIMEOUT)
   // ================================================================
   Future<void> analyzeAtPosition(int page) async {
     if (!isReady) return;
@@ -173,13 +197,28 @@ class ReadingSessionManager {
     try {
       lastAnalyzedPage = page;
 
+      // Check if document is actually indexed
+      if (!_vectorService.isDocumentIndexed(_currentDocumentId!)) {
+        log('Document not yet indexed, using default theme');
+        _emitTheme('default');
+        anchorPage = page;
+        return;
+      }
+
       final query =
           'Determine the emotional or narrative theme for this segment near page $page';
 
+      // Add timeout to prevent infinite waiting
       final chunks = await _vectorService.retrieveRelevantContext(
         query,
         topK: 5,
         documentId: _currentDocumentId,
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          log('Retrieval timeout');
+          return [];
+        },
       );
 
       if (chunks.isEmpty) {
@@ -191,9 +230,16 @@ class ReadingSessionManager {
       final contextText =
           chunks.map((c) => c['content']).join('\n\n');
 
+      // Add timeout for theme analysis
       final theme = await _analyzer.getThemeFromContext(
         contextText,
         query,
+      ).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          log('Theme analysis timeout');
+          return 'default';
+        },
       );
 
       final finalTheme = theme ?? 'default';
