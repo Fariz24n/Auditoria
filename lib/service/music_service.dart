@@ -68,27 +68,19 @@ class MusicService {
   // Set playlist based on theme name (fetch from DB)
   Future<void> setPlaylistByTheme(String theme, {int startIndex = 0}) async {
     debugPrint("MusicService: Mencari lagu untuk tema '$theme'...");
+    await Future.delayed(const Duration(milliseconds: 50));
     final songs = await db.getSongsByThemeName(theme);
 
     if (songs.isEmpty) {
-          debugPrint('MusicService: Lagu Kosong untuk tema $theme');
-          // Jangan lupa update UI bahwa playlist kosong
-          _playlist = [];
-          _playlistCtl.add(_playlist);
-          await stop();
-          return;
-        }
-    final files = songs.map((s) => MusicFile(
-      id: s.id,
-      themeId: null,
-      title: s.title ?? 'Untitled',
-      path: s.filePath,
-      durationMs: null,
-    )).toList();
-    debugPrint("MusicService: Ditemukan ${files.length} lagu. Memulai player...");
-    
-    if (files.isEmpty) {
-      debugPrint('No songs found for theme $theme');
+      debugPrint('MusicService: Lagu Kosong untuk tema "$theme"');
+
+      if (theme != 'default') {
+         debugPrint('MusicService: Mencoba memutar tema "default" sebagai cadangan...');
+         return setPlaylistByTheme('default'); // <--- Panggil diri sendiri (Rekursif)
+      }
+
+      // Jika tema sudah 'default' dan masih kosong juga, baru kita menyerah.
+      debugPrint('MusicService: Tema "default" juga kosong. Player berhenti.');
       _playlist = [];
       _playlistCtl.add(_playlist);
       _currentIndex = -1;
@@ -96,6 +88,20 @@ class MusicService {
       await stop();
       return;
     }
+
+    // 3. Mapping Data (Hanya jalan kalau lagu ditemukan)
+    final files = songs.map((s) => MusicFile(
+      id: s.id,
+      themeId: null,
+      title: s.title ?? 'Untitled',
+      path: s.filePath,
+      durationMs: null,
+    )).toList();
+
+    debugPrint("MusicService: Ditemukan ${files.length} lagu. Memulai player...");
+
+    // (Blok 'if (files.isEmpty)' yang kedua tadi saya hapus karena redundan/tidak perlu.
+    // Kalau 'songs' tidak empty, 'files' pasti tidak empty).
 
     _playlist = files;
     _playlistCtl.add(_playlist);

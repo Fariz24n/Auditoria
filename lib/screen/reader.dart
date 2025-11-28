@@ -76,9 +76,9 @@ class ReadingSessionManager {
         extractedText,
         'Analyze the emotional theme of this book passage',
       ).timeout(
-        const Duration(seconds: 8),
+        const Duration(seconds: 20),
         onTimeout: () {
-          log('Theme analysis timeout');
+          log('Theme analysis timeout (20s reached)');
           return 'default';
         },
       );
