@@ -55,17 +55,11 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
         return;
       }
 
-      // 🔥 AI just turned ON → warm up session (NON-BLOCKING)
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (!mounted || book == null || book!.filePath.isEmpty) return;
-        
-        if (!_reader.isReady) {
-          _reader.startSession(book!.filePath);
-        } else {
-          final currentPage = _pdfController?.page ?? 1;
-          _reader.onReadingPositionChanged(currentPage);
-        }
-      });
+      // 🔥 AI just turned ON → analyze current page immediately
+      if (book != null && book!.filePath.isNotEmpty) {
+        final currentPage = _pdfController?.page ?? 1;
+        _reader.analyzeCurrentPages(book!.filePath, currentPage);
+      }
     });
   }
 
@@ -159,15 +153,7 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
       _isOpeningPdf = false;
     }
 
-    // ============================================================
-    //  WARMUP AI SESSION once book is opened & ready
-    // ============================================================
-    if (_aiActive && book != null) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!mounted || _reader.isReady) return;
-        _reader.startSession(book!.filePath);
-      });
-    }
+    // No warmup needed - AI only activates when button pressed
   }
 
   // ============================================================
@@ -179,7 +165,6 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
       appBar: AppBar(
         title: Text(book?.title ?? 'PDF Viewer'),
         actions: [
-          if (_aiActive)
             IconButton(
               icon: Icon(
                 _showMusicWidget ? Icons.music_note : Icons.music_off,
@@ -237,20 +222,10 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
           else
             PdfViewPinch(
               controller: _pdfController!,
-              onPageChanged: (page) {
-                if (!_aiActive) return;
-
-                // ============================================================
-                // 🔥 UI DEBOUNCE untuk SCROLL CEPAT
-                // ============================================================
-                _scrollDebounce?.cancel();
-                _scrollDebounce = Timer(const Duration(milliseconds: 800), () {
-                  _reader.onReadingPositionChanged(page);
-                });
-              },
+              // No onPageChanged - we only analyze once when AI button pressed
             ),
 
-          if (_aiActive && _showMusicWidget)
+          if (_showMusicWidget)
             Positioned(
               bottom: 20,
               left: 0,
