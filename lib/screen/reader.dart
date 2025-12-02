@@ -1,12 +1,12 @@
 // lib/screen/reader.dart
 import 'dart:async';
-import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../service/ai/theme_service.dart';
 import '../service/music_service.dart';
 import '../service/ai/ai_activation.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../service/ai/chapter_parser.dart';
 
 class ReadingSessionManager {
   final ThemeAnalyzer _analyzer = ThemeAnalyzer();
@@ -39,69 +39,85 @@ class ReadingSessionManager {
   // ON-DEMAND ANALYSIS - No Indexing, Just Analyze Current Pages
   // ================================================================
   Future<void> analyzeCurrentPages(String pdfPath, int currentPage) async {
-    if (_isAnalyzing) {
-      log('Already analyzing, skipping...');
-      return;
-    }
+    if (_isAnalyzing) return;
 
     _isAnalyzing = true;
+    // Hentikan debounce/timer sebelumnya jika ada
+    _themeDebounce?.cancel(); 
     
-    log('Starting on-demand analysis for pages around $currentPage');
+    debugPrint("🚀 [Reader] Memulai analisis halaman $currentPage via ChapterParser...");
 
     try {
-      // Extract text from current page ± 1 page (3 pages total)
+      // 1. Ambil Raw Text (Reader tetap harus melakukan I/O ini)
       final pageRange = _calculatePageRange(currentPage);
-      
-      final extractedText = await compute(
+      final rawText = await compute(
         _extractPagesText,
         {'path': pdfPath, 'startPage': pageRange['start']!, 'endPage': pageRange['end']!},
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          log('Text extraction timeout');
-          return '';
-        },
-      );
+      ).timeout(const Duration(seconds: 10), onTimeout: () => '');
 
-      if (extractedText.isEmpty || extractedText.length < 100) {
-        log('Not enough text extracted, using default theme');
+      if (rawText.isEmpty || rawText.length < 50) {
+        debugPrint("⚠️ [Reader] Teks kosong/terlalu pendek.");
         _emitTheme('default');
         return;
       }
 
-      log('Extracted ${extractedText.length} characters, analyzing theme...');
-
-      // Analyze theme directly from extracted text
-      final theme = await _analyzer.getThemeFromContext(
-        extractedText,
-        'Analyze the emotional theme of this book passage',
-      ).timeout(
-        const Duration(seconds: 20),
-        onTimeout: () {
-          log('Theme analysis timeout (20s reached)');
-          return 'default';
-        },
+      // 2. 🔥 INTEGRASI CHAPTER PARSER 🔥
+      // Kita panggil fungsi chunkTextForRAG milik ChapterParser.
+      // Fungsi ini sudah punya logika 'Smart Boundary' dan pembersihan dasar.
+      // Kita set chunkSize 1000 karakter agar pas untuk konteks AI (tidak kepanjangan).
+      
+      final List<Map<String, dynamic>> chunks = await compute(
+        _processWithParser, // Fungsi helper baru (lihat di bawah)
+        rawText,
       );
 
-      final finalTheme = theme ?? 'default';
-      log('Analysis complete: $finalTheme');
+      if (chunks.isEmpty) {
+        debugPrint("⚠️ [Reader] ChapterParser tidak menghasilkan chunk valid.");
+        _emitTheme('default');
+        return;
+      }
+
+      // 3. Seleksi Chunk Terbaik
+      // Karena kita mengambil range halaman (misal hal 4,5,6), 
+      // kita ambil chunk yang berada di "tengah" atau chunk pertama yang cukup panjang.
+      // Ini mewakili inti cerita di halaman tersebut.
+      final selectedChunk = chunks.first['content'] as String;
       
-      _emitTheme(finalTheme);
+      debugPrint("✅ [Reader] ChapterParser berhasil! Mengirim ${selectedChunk.length} chars ke AI.");
+      debugPrint("📝 [Preview] ${selectedChunk.substring(0, 100)}...");
+
+      // 4. Kirim ke ThemeAnalyzer
+      final theme = await _analyzer.getThemeFromContext(
+        selectedChunk, // Teks ini sudah bersih berkat ChapterParser
+        'Analyze emotional theme...',
+      );
+
+      _emitTheme(theme ?? 'default');
 
     } catch (e) {
-      log('Analysis error: $e');
+      debugPrint("🚨 [Reader] Error: $e");
       _emitTheme('default');
     } finally {
       _isAnalyzing = false;
-      
-      // Auto-disable AI after analysis completes
+      // Auto-off logic (tetap dipertahankan)
       Future.delayed(const Duration(milliseconds: 500), () {
         if (AiActivationService.instance.isActive) {
-          log('Analysis complete, auto-disabling AI mode');
-          AiActivationService.instance.setActive(false);
+           AiActivationService.instance.setActive(false);
         }
       });
     }
+  }
+
+  // --- HELPER UNTUK COMPUTE ISOLATE ---
+  // Taruh ini di luar class atau sebagai static method
+  static List<Map<String, dynamic>> _processWithParser(String text) {
+    // Memanfaatkan logika cleaning & chunking yang sudah Anda buat di ChapterParser
+    // source: [cite: 83]
+    return ChapterParser.chunkTextForRAG(
+      text,
+      chunkSize: 1000, // Ukuran ideal untuk analisis tema
+      overlap: 100,    // Supaya konteks antar potongan tidak hilang
+    );
   }
 
   // ================================================================

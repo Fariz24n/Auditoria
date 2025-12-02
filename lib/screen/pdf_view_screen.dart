@@ -254,8 +254,18 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
           else
             PdfViewPinch(
               controller: _pdfController!,
+              onPageChanged: (page) {
+                if (_scrollDebounce?.isActive ?? false) _scrollDebounce!.cancel();
+                _scrollDebounce = Timer(const Duration(seconds: 2), () {
+                  if (mounted && page > 0) {
+                    db.updateLastPage(widget.bookId, page);
+                    debugPrint("💾 Halaman $page tersimpan otomatis!");
+                    }
+                  });
+                },
+              ),
               // No onPageChanged - we only analyze once when AI button pressed
-            ),
+
 
           if (_showMusicWidget)
             Positioned(

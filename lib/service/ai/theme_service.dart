@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -34,73 +35,126 @@ class ThemeAnalyzer {
     );
   }
 
+// GANTI SELURUH METHOD getThemeFromContext DENGAN INI:
   Future<String?> getThemeFromContext(
     String contextText,
     String query,
   ) async {
-    if (contextText.trim().isEmpty) return 'default';
+    debugPrint('\n' + '-' * 60);
+    debugPrint('🤖 [AI] THEME ANALYSIS STARTING');
+    debugPrint('-' * 60);
 
-    // 🔥 FIX 2: Pertegas Prompt dengan Daftar Tema Valid
+    // Input validation
+    if (contextText.trim().isEmpty) {
+      debugPrint('🚨 [AI] ❌ Empty context text');
+      return 'default';
+    }
+
+    // Pertegas Prompt agar AI lebih patuh
     final prompt = '''
-    Analyze the narrative context provided below and determine the most appropriate emotional theme/atmosphere.
-    
-    CONTEXT:
-    $contextText
-    
-    INSTRUCTIONS:
-    1. You must choose ONE theme strictly from this list: ${_validThemes.join(', ')}.
-    2. If the text is neutral or unclear, choose 'calming'.
-    3. Return JSON format: {"theme": "selected_theme", "confidence": 0.0-1.0}
-    4. Confidence Score Guide:
-       - 0.9: Explicit keywords (e.g., "tears", "blood", "laugh").
-       - 0.6: Implied atmosphere.
-    ''';
+Analyze the narrative context provided below and determine the most appropriate emotional theme.
+
+CONTEXT:
+$contextText
+
+INSTRUCTIONS:
+1. STRICTLY choose ONE theme from: ${_validThemes.join(', ')}.
+2. If text is neutral/unclear, choose 'calming'.
+3. Return JSON: {"theme": "selected_theme", "confidence": 0.0-1.0}
+4. Ignore headers, page numbers, or broken sentences. Focus on emotional keywords.
+''';
 
     try {
-      debugPrint("ThemeAnalyzer: Sending to Gemini..."); // Debug Log
-      final response = await _model.generateContent([Content.text(prompt)]);
-      
-      debugPrint("ThemeAnalyzer Raw Response: ${response.text}"); // 🔥 WAJIB LIHAT INI DI LOG
+      final response = await _model.generateContent([Content.text(prompt)])
+          .timeout(const Duration(seconds: 12));
 
-      final jsonResult = _safeJsonDecode(response.text);
+      final rawText = response.text;
+      if (rawText == null || rawText.isEmpty) return 'default';
+
+      final jsonResult = _safeJsonDecode(rawText);
       
-      final theme = jsonResult['theme'] as String?;
+      String? theme = jsonResult['theme'] as String?;
       final confidence = (jsonResult['confidence'] as num?)?.toDouble() ?? 0.0;
 
-      // 🔥 FIX 1: Turunkan Threshold Confidence ke 0.5 atau 0.6
-      // Lebih baik musik main (meski agak meleset) daripada 'default' terus.
-      if (confidence < 0.5) { 
-        debugPrint("ThemeAnalyzer: Confidence too low ($confidence). Using default.");
+      debugPrint('🎯 [AI] Raw Theme: "$theme", Confidence: $confidence');
+
+      // 1. Turunkan Batas Confidence ke 0.4 (Lebih toleran)
+      if (confidence < 0.4) {
+        debugPrint('⚠️ [AI] Confidence low ($confidence). Using default.');
         return 'default';
       }
 
-      if (theme == null || !_validThemes.contains(theme.toLowerCase())) {
-        debugPrint("ThemeAnalyzer: Invalid theme '$theme'. Using default.");
-        return 'default';
+      if (theme == null) return 'default';
+      
+      // 2. Normalisasi & Mapping Manual (Agar tidak kaku)
+      String themeLower = theme.toLowerCase();
+
+      // Cek apakah tema ada di daftar valid
+      if (!_validThemes.contains(themeLower)) {
+        debugPrint('⚠️ [AI] Invalid theme "$themeLower". Trying to map...');
+        
+        // Logika "Penyelamat": Mapping tema mirip ke tema valid
+        if (themeLower.contains('sad') || themeLower.contains('depress')) themeLower = 'melancholic';
+        else if (themeLower.contains('joy') || themeLower.contains('fun')) themeLower = 'happy';
+        else if (themeLower.contains('fear') || themeLower.contains('scary') || themeLower.contains('suspense')) themeLower = 'thrill';
+        else if (themeLower.contains('fight') || themeLower.contains('war')) themeLower = 'battle';
+        else if (themeLower.contains('relax')) themeLower = 'calming';
+        else {
+           debugPrint('🚨 [AI] ❌ Mapping failed. Fallback to default.');
+           return 'default';
+        }
+        debugPrint('✅ [AI] Mapped to valid theme: "$themeLower"');
       }
 
-      return theme.toLowerCase();
+      return themeLower;
 
     } catch (e) {
-      debugPrint('ThemeAnalyzer Error: $e');
+      debugPrint('🚨 [AI] ❌ Error: $e');
       return 'default';
     }
   }
 
   Map<String, dynamic> _safeJsonDecode(String? text) {
-    if (text == null) return {};
-    try {
-      return jsonDecode(text);
-    } catch (_) {
-      final match = RegExp(r'\{.*\}', dotAll: true).firstMatch(text);
-      if (match != null) {
-        try {
-          return jsonDecode(match.group(0)!);
-        } catch (e) {
-          return {}; 
-        }
-      }
+    if (text == null || text.isEmpty) {
+      debugPrint('🚨 [JSON] Null or empty text');
       return {};
     }
+
+    // Remove markdown code blocks if present
+    String cleaned = text.trim();
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.substring(7);
+    }
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.substring(3);
+    }
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.substring(0, cleaned.length - 3);
+    }
+    cleaned = cleaned.trim();
+
+    // Try direct decode
+    try {
+      final result = jsonDecode(cleaned);
+      debugPrint('✅ [JSON] Successfully parsed');
+      return result as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('⚠️ [JSON] Direct decode failed: $e');
+    }
+
+    // Try extracting JSON object
+    final match = RegExp(r'\{[^{}]*"theme"[^{}]*\}', dotAll: true).firstMatch(cleaned);
+    if (match != null) {
+      try {
+        final result = jsonDecode(match.group(0)!);
+        debugPrint('✅ [JSON] Extracted and parsed JSON object');
+        return result as Map<String, dynamic>;
+      } catch (e) {
+        debugPrint('⚠️ [JSON] Extraction failed: $e');
+      }
+    }
+
+    debugPrint('🚨 [JSON] ❌ All parsing attempts failed');
+    return {};
   }
 }

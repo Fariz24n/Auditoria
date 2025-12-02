@@ -37,9 +37,9 @@ class ChapterParser {
   }
 
   /// --------------------------------------------------------------
-  /// 2. CHUNK GENERATOR FOR RAG (HIGH QUALITY)
+  /// 2. CHUNK GENERATOR FOR RAG 
   /// --------------------------------------------------------------
-  /// Tujuan:
+  /// Cara kerja:
   /// - Potong menjadi chunk 400–600 karakter
   /// - Ada overlap kecil supaya tidak kehilangan konteks
   /// - Boundary-aware (tidak potong di tengah kata/periode)
