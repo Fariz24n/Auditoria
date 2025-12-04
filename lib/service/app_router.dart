@@ -7,6 +7,7 @@ import '../screen/favorit.dart';
 import '../screen/import.dart';
 import '../screen/playlist_screen.dart';
 import '../service/music_service.dart';
+import '../screen/book_detail.dart';
 
 // note: reuse db instance and create musicService here or inject from app root
 final AppDatabase db = AppDatabase();
@@ -30,6 +31,17 @@ final GoRouter appRouter = GoRouter(
               );
             }
             return PdfViewScreen(bookId: id);
+          },
+        ),
+        GoRoute(
+          path: 'edit-book/:id',
+          builder: (BuildContext context, GoRouterState state) {
+            final id = int.tryParse(state.pathParameters['id'] ?? '');
+            if (id == null) {
+              return const Scaffold(body: Center(child: Text('Error ID')));
+            }
+            // Kita arahkan ke layar Edit/Detail
+            return BookDetailScreen(bookId: id, db: db);
           },
         ),
         GoRoute(

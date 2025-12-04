@@ -22,11 +22,11 @@ class BookSpine extends StatefulWidget {
 
 class _BookSpineState extends State<BookSpine> {
   bool _hover = false;
-
+  // === book_spine.dart ===
   @override
   Widget build(BuildContext context) {
     final cover = widget.book.coverPath ?? '';
-
+    
     return GestureDetector(
       onTap: () => context.go('/book/${widget.book.id}'),
       child: MouseRegion(
@@ -34,31 +34,28 @@ class _BookSpineState extends State<BookSpine> {
         onExit: (_) => setState(() => _hover = false),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          transform: Matrix4.identity()
-            ..translateByVector3(Vector3(0, _hover ? -8 : 0, 0)),
+          // Efek angkat buku saat di-hover
+          transform: Matrix4.identity()..translateByVector3(Vector3(0, _hover ? -10 : 0, 0)),
           child: Container(
             width: widget.width,
             height: widget.height,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8), // Radius sedikit lebih besar
+              // Shadow yang lebih realistis (Deep Shadow)
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: _hover ? 0.4 : 0.25),
-                  blurRadius: _hover ? 16 : 8,
-                  offset: Offset(0, _hover ? 8 : 4),
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 4,
-                  offset: const Offset(3, 0),
+                  color: Colors.black.withValues(alpha: _hover ? 0.6 : 0.4),
+                  blurRadius: _hover ? 20 : 10,
+                  offset: Offset(4, _hover ? 12 : 6),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // 1. GAMBAR COVER
                   if (cover.isNotEmpty)
                     Image.file(
                       File(cover),
@@ -68,79 +65,60 @@ class _BookSpineState extends State<BookSpine> {
                   else
                     _placeholder(),
 
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: widget.height * 0.3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.white.withValues(alpha: 0.15),
-                            Colors.transparent
-                          ],
-                        ),
+                  // 2. HIGHLIGHT PINGGIRAN (PENTING DI DARK MODE)
+                  // Ini membuat buku tidak "mati" di background hitam
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        width: 1, 
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.1), // Efek kilap
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.3), // Efek lipatan buku
+                        ],
                       ),
                     ),
                   ),
 
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 4,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.black.withValues(alpha: 0.3),
-                            Colors.black.withValues(alpha: 0.1),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
+                  // 3. JUDUL BUKU (Minimalis di Bawah)
+                  // Jika ada cover, teks kita buat lebih subtle
                   Positioned(
                     bottom: 0,
                     left: 0,
                     right: 0,
                     child: Container(
-                      padding: const EdgeInsets.all(6),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
                           colors: [
+                            Colors.black.withValues(alpha: 0.9),
                             Colors.transparent,
-                            Colors.black.withValues(alpha: 0.7)
                           ],
                         ),
                       ),
                       child: Text(
                         widget.book.title,
                         maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                          fontSize: 10, // Font kecil tapi rapi
+                          fontFamily: 'Sans', // Gunakan font sans-serif jika ada
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
                   ),
-
-                  if (_hover)
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).primaryColor.withValues(alpha: 0.6),
-                          width: 2,
-                        ),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -149,6 +127,132 @@ class _BookSpineState extends State<BookSpine> {
       ),
     );
   }
+  // @override
+  // Widget build(BuildContext context) {
+  //   final cover = widget.book.coverPath ?? '';
+
+  //   return GestureDetector(
+  //     onTap: () => context.go('/book/${widget.book.id}'),
+  //     child: MouseRegion(
+  //       onEnter: (_) => setState(() => _hover = true),
+  //       onExit: (_) => setState(() => _hover = false),
+  //       child: AnimatedContainer(
+  //         duration: const Duration(milliseconds: 200),
+  //         transform: Matrix4.identity()
+  //           ..translateByVector3(Vector3(0, _hover ? -8 : 0, 0)),
+  //         child: Container(
+  //           width: widget.width,
+  //           height: widget.height,
+  //           decoration: BoxDecoration(
+  //             borderRadius: BorderRadius.circular(6),
+  //             boxShadow: [
+  //               BoxShadow(
+  //                 color: Colors.black.withValues(alpha: _hover ? 0.4 : 0.25),
+  //                 blurRadius: _hover ? 16 : 8,
+  //                 offset: Offset(0, _hover ? 8 : 4),
+  //               ),
+  //               BoxShadow(
+  //                 color: Colors.black.withValues(alpha: 0.15),
+  //                 blurRadius: 4,
+  //                 offset: const Offset(3, 0),
+  //               ),
+  //             ],
+  //           ),
+  //           child: ClipRRect(
+  //             borderRadius: BorderRadius.circular(6),
+  //             child: Stack(
+  //               fit: StackFit.expand,
+  //               children: [
+  //                 if (cover.isNotEmpty)
+  //                   Image.file(
+  //                     File(cover),
+  //                     fit: BoxFit.cover,
+  //                     errorBuilder: (_, __, ___) => _placeholder(),
+  //                   )
+  //                 else
+  //                   _placeholder(),
+
+  //                 Positioned(
+  //                   top: 0,
+  //                   left: 0,
+  //                   right: 0,
+  //                   height: widget.height * 0.3,
+  //                   child: Container(
+  //                     decoration: BoxDecoration(
+  //                       gradient: LinearGradient(
+  //                         colors: [
+  //                           Colors.white.withValues(alpha: 0.15),
+  //                           Colors.transparent
+  //                         ],
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ),
+
+  //                 Positioned(
+  //                   right: 0,
+  //                   top: 0,
+  //                   bottom: 0,
+  //                   width: 4,
+  //                   child: Container(
+  //                     decoration: BoxDecoration(
+  //                       gradient: LinearGradient(
+  //                         colors: [
+  //                           Colors.black.withValues(alpha: 0.3),
+  //                           Colors.black.withValues(alpha: 0.1),
+  //                         ],
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ),
+
+  //                 Positioned(
+  //                   bottom: 0,
+  //                   left: 0,
+  //                   right: 0,
+  //                   child: Container(
+  //                     padding: const EdgeInsets.all(6),
+  //                     decoration: BoxDecoration(
+  //                       gradient: LinearGradient(
+  //                         colors: [
+  //                           Colors.transparent,
+  //                           Colors.black.withValues(alpha: 0.7)
+  //                         ],
+  //                       ),
+  //                     ),
+  //                     child: Text(
+  //                       widget.book.title,
+  //                       maxLines: 2,
+  //                       overflow: TextOverflow.ellipsis,
+  //                       textAlign: TextAlign.center,
+  //                       style: const TextStyle(
+  //                         color: Colors.white,
+  //                         fontSize: 11,
+  //                         fontWeight: FontWeight.w500,
+  //                         shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ),
+
+  //                 if (_hover)
+  //                   Container(
+  //                     decoration: BoxDecoration(
+  //                       border: Border.all(
+  //                         color: Theme.of(context).primaryColor.withValues(alpha: 0.6),
+  //                         width: 2,
+  //                       ),
+  //                       borderRadius: BorderRadius.circular(6),
+  //                     ),
+  //                   ),
+  //               ],
+  //             ),
+  //           ),
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _placeholder() {
     final idx = widget.book.title.hashCode % 6;

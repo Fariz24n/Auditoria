@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pdfx/pdfx.dart';
 import '../drift/app_database.dart';
 import '../service/database_instance.dart';
 import '../service/ai/ai_activation.dart';
 import '../screen/reader.dart';
+import 'package:pdfx/pdfx.dart';
 import '../widget/music_player_widget.dart';
 import '../service/app_router.dart' as router;
 

@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 
 part 'app_database.g.dart';
 
-/// ===== Tabel Buku =====
+/// ===== Tabel Buku =====  
 class Books extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text()();
@@ -48,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 4) {
-            await m.createTable(vibes);
+            await m.createTable(themes);
             await m.createTable(songs);
           }
         },
@@ -99,10 +99,10 @@ class AppDatabase extends _$AppDatabase {
   // ===== Playlist / Music DAO (core) =====
 
   /// Core: get all themes (one-shot)
-  Future<List<Vibe>> getAllThemesCore() => select(vibes).get();
+  Future<List<Theme>> getAllThemesCore() => select(themes).get();
 
   /// Core: watch themes (stream)
-  Stream<List<Vibe>> watchAllThemesCore() => select(vibes).watch();
+  Stream<List<Theme>> watchAllThemesCore() => select(themes).watch();
 
   /// Core: get songs by theme name
   Future<List<Song>> getSongsByTheme(String themeName) {
@@ -120,7 +120,7 @@ class AppDatabase extends _$AppDatabase {
 
   /// Core: add theme
   Future<void> addThemeCore(String name) async {
-    await into(vibes).insert(ThemesCompanion.insert(name: name));
+    await into(themes).insert(ThemesCompanion.insert(name: name));
   }
 
   /// Core: add song (returns inserted id)
@@ -134,9 +134,9 @@ class AppDatabase extends _$AppDatabase {
     return transaction(() async {
       if (createThemeIfMissing) {
         final existing =
-            await (select(vibes)..where((t) => t.name.equals(themeName))).get();
+            await (select(themes)..where((t) => t.name.equals(themeName))).get();
         if (existing.isEmpty) {
-          await into(vibes).insert(ThemesCompanion.insert(name: themeName));
+          await into(themes).insert(ThemesCompanion.insert(name: themeName));
         }
       }
 
@@ -175,10 +175,10 @@ class AppDatabase extends _$AppDatabase {
   // ===== Compatibility wrappers (names expected by existing code) =====
 
   /// Compatibility: original callers expecting getAllThemes()
-  Future<List<Vibe>> getAllThemes() => getAllThemesCore();
+  Future<List<Theme>> getAllThemes() => getAllThemesCore();
 
   /// Compatibility: original callers expecting a streaming watcher
-  Stream<List<Vibe>> watchAllThemes() => watchAllThemesCore();
+  Stream<List<Theme>> watchAllThemes() => watchAllThemesCore();
 
   /// Compatibility: provide method name used by older UI code
   /// getSongsByThemeId(String themeName) maps to getSongsByTheme
@@ -192,7 +192,7 @@ class AppDatabase extends _$AppDatabase {
   /// Compatibility: addThemeIfNotExists(name)
   Future<void> addThemeIfNotExists(String name) async {
     final existing =
-        await (select(vibes)..where((t) => t.name.equals(name))).get();
+        await (select(themes)..where((t) => t.name.equals(name))).get();
     if (existing.isEmpty) {
       await addThemeCore(name);
     }
@@ -226,7 +226,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteTheme(String name) async {
     await transaction(() async {
       await (delete(songs)..where((s) => s.themeName.equals(name))).go();
-      await (delete(vibes)..where((t) => t.name.equals(name))).go();
+      await (delete(themes)..where((t) => t.name.equals(name))).go();
     });
   }
 
@@ -246,6 +246,32 @@ class AppDatabase extends _$AppDatabase {
         BooksCompanion(fileExists: Value(exists)),
       );
     }
+  }
+
+  Stream<List<String>> watchUniqueThemes() {
+    final query = selectOnly(books, distinct: true)
+      ..addColumns([books.theme])
+      ..where(books.theme.isNotNull() & books.theme.length.isBiggerThanValue(0));
+
+    return query.map((row) => row.read(books.theme)!).watch();
+  }
+
+  // 2. Mengambil buku berdasarkan filter (Favorit atau Nama Rak)
+  Stream<List<Book>> watchBooksFiltered({String? shelf, bool onlyFavorites = false}) {
+    return (select(books)
+      ..where((tbl) {
+        if (onlyFavorites) {
+          return tbl.isFavorite.equals(true);
+        }
+        if (shelf != null && shelf.isNotEmpty) {
+          // Filter berdasarkan nama rak (theme)
+          return tbl.theme.equals(shelf);
+        }
+        // Jika tidak ada filter, return true (semua buku)
+        return const Constant(true);
+      })
+      ..orderBy([(t) => OrderingTerm(expression: t.displayOrder)]))
+      .watch();
   }
 }
 

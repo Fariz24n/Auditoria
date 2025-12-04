@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../drift/app_database.dart';
 import '../service/ai/ai_activation.dart';
 import 'bookshelf_view.dart';
+import '../widget/library_drawer.dart';
 
 class LibraryScreen extends StatefulWidget {
   final AppDatabase db;
@@ -22,7 +23,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     db = widget.db;
-
     _aiEnabled = AiActivationService.instance.isActive;
     _aiSub = AiActivationService.instance.onActivationChanged.listen((v) {
       if (!mounted) return;
@@ -38,9 +38,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. BACA FILTER DARI URL (Router)
+    final state = GoRouterState.of(context);
+    final filterShelf = state.uri.queryParameters['shelf'];
+    final filterFav = state.uri.queryParameters['filter'] == 'favorites';
+
+    // Tentukan Judul AppBar (Wrapped in blocks)
+    String appBarTitle = "Perpustakaan";
+    if (filterFav) {
+      appBarTitle = "Favorit";
+    } else if (filterShelf != null) {
+      appBarTitle = filterShelf;
+    }
+
     return Scaffold(
+      // 2. PASANG SIDEBAR DI SINI
+      drawer: LibraryDrawer(db: widget.db), 
+      
       appBar: AppBar(
-        title: const Text("Perpustakaan"),
+        title: Text(appBarTitle),
         actions: [
           IconButton(
             icon: Icon(
@@ -56,6 +72,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         ? 'Mode AI diaktifkan.'
                         : 'Mode AI dimatikan.',
                   ),
+                  duration: const Duration(seconds: 1),
                 ),
               );
             },
@@ -63,17 +80,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ],
       ),
 
+      // 3. GUNAKAN STREAM YANG SUDAH DIFILTER
       body: StreamBuilder<List<Book>>(
-        stream: db.watchAllBooks(),
+        stream: db.watchBooksFiltered(
+          shelf: filterShelf,
+          onlyFavorites: filterFav,
+        ),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final books = snapshot.data ?? [];
           if (books.isEmpty) {
-            return _emptyState(context);
+            return _emptyState(context, filterShelf, filterFav);
           }
 
           return BookshelfView(books: books, db: db);
@@ -88,7 +108,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _emptyState(BuildContext context) {
+  Widget _emptyState(BuildContext context, String? shelf, bool isFav) {
+    String message = "Rak buku Anda masih kosong";
+    
+    // Logic wrapped in blocks
+    if (isFav) {
+      message = "Belum ada buku Favorit";
+    } else if (shelf != null) {
+      message = "Rak '$shelf' masih kosong";
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -96,19 +125,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Icon(Icons.auto_stories_outlined, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
-            "Rak buku Anda masih kosong",
+            message,
             style: TextStyle(
               fontSize: 18,
               color: Colors.grey[600],
               fontWeight: FontWeight.w300,
             ),
           ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => context.go('/import'),
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah Buku'),
-          ),
+          if (!isFav && shelf == null) ...[
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => context.go('/import'),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Buku'),
+            ),
+          ]
         ],
       ),
     );

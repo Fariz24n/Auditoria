@@ -40,7 +40,7 @@ class ThemeAnalyzer {
     String contextText,
     String query,
   ) async {
-    debugPrint('\n' + '-' * 60);
+    debugPrint('\n${'-' * 60}');
     debugPrint('🤖 [AI] THEME ANALYSIS STARTING');
     debugPrint('-' * 60);
 
@@ -94,12 +94,19 @@ INSTRUCTIONS:
         debugPrint('⚠️ [AI] Invalid theme "$themeLower". Trying to map...');
         
         // Logika "Penyelamat": Mapping tema mirip ke tema valid
-        if (themeLower.contains('sad') || themeLower.contains('depress')) themeLower = 'melancholic';
-        else if (themeLower.contains('joy') || themeLower.contains('fun')) themeLower = 'happy';
-        else if (themeLower.contains('fear') || themeLower.contains('scary') || themeLower.contains('suspense')) themeLower = 'thrill';
-        else if (themeLower.contains('fight') || themeLower.contains('war')) themeLower = 'battle';
-        else if (themeLower.contains('relax')) themeLower = 'calming';
-        else {
+        if (themeLower.contains('sad') || themeLower.contains('depress')) {
+            themeLower = 'melancholic';
+          } else if (themeLower.contains('joy') || themeLower.contains('fun')) {
+            themeLower = 'happy';
+          } else if (themeLower.contains('fear') || 
+                    themeLower.contains('scary') || 
+                    themeLower.contains('suspense')) {
+            themeLower = 'thrill';
+          } else if (themeLower.contains('fight') || themeLower.contains('war')) {
+            themeLower = 'battle';
+          } else if (themeLower.contains('relax')) {
+            themeLower = 'calming';
+          } else {
            debugPrint('🚨 [AI] ❌ Mapping failed. Fallback to default.');
            return 'default';
         }

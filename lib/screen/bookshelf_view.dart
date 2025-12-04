@@ -35,8 +35,8 @@ class _BookshelfViewState extends State<BookshelfView> {
       builder: (context, c) {
         final screenWidth = c.maxWidth;
         final booksPerShelf = _calcBooksPerShelf(screenWidth);
-        final bookWidth = (screenWidth - 48) / booksPerShelf - 12;
-        final bookHeight = bookWidth * 1.5;
+        final bookWidth = (screenWidth - 48) / booksPerShelf - 16;
+        final bookHeight = bookWidth * 1.45;
 
         final shelves = _groupBooks(_currentBooks, booksPerShelf);
 

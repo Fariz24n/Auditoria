@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Theme;
+import 'package:flutter/material.dart' as material show Theme;
 import '../drift/app_database.dart';
 import 'book_spine.dart';
 
@@ -64,7 +65,7 @@ class DraggableBookSpine extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: Theme.of(context).primaryColor,
+                        color: material.Theme.of(context).primaryColor,
                         width: 3,
                       ),
                     ),

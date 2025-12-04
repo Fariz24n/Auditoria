@@ -472,7 +472,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   }
 }
 
-class $ThemesTable extends Themes with TableInfo<$ThemesTable, Vibe> {
+class $ThemesTable extends Themes with TableInfo<$ThemesTable, Theme> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -488,9 +488,9 @@ class $ThemesTable extends Themes with TableInfo<$ThemesTable, Vibe> {
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'vibes';
+  static const String $name = 'themes';
   @override
-  VerificationContext validateIntegrity(Insertable<Vibe> instance,
+  VerificationContext validateIntegrity(Insertable<Theme> instance,
       {bool isInserting = false}) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
@@ -506,9 +506,9 @@ class $ThemesTable extends Themes with TableInfo<$ThemesTable, Vibe> {
   @override
   Set<GeneratedColumn> get $primaryKey => {name};
   @override
-  Vibe map(Map<String, dynamic> data, {String? tablePrefix}) {
+  Theme map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Vibe(
+    return Theme(
       name: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
     );
@@ -520,9 +520,9 @@ class $ThemesTable extends Themes with TableInfo<$ThemesTable, Vibe> {
   }
 }
 
-class Vibe extends DataClass implements Insertable<Vibe> {
+class Theme extends DataClass implements Insertable<Theme> {
   final String name;
-  const Vibe({required this.name});
+  const Theme({required this.name});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -536,10 +536,10 @@ class Vibe extends DataClass implements Insertable<Vibe> {
     );
   }
 
-  factory Vibe.fromJson(Map<String, dynamic> json,
+  factory Theme.fromJson(Map<String, dynamic> json,
       {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return Vibe(
+    return Theme(
       name: serializer.fromJson<String>(json['name']),
     );
   }
@@ -551,18 +551,18 @@ class Vibe extends DataClass implements Insertable<Vibe> {
     };
   }
 
-  Vibe copyWith({String? name}) => Vibe(
+  Theme copyWith({String? name}) => Theme(
         name: name ?? this.name,
       );
-  Vibe copyWithCompanion(ThemesCompanion data) {
-    return Vibe(
+  Theme copyWithCompanion(ThemesCompanion data) {
+    return Theme(
       name: data.name.present ? data.name.value : this.name,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('Vibe(')
+    return (StringBuffer('Theme(')
           ..write('name: $name')
           ..write(')'))
         .toString();
@@ -572,10 +572,10 @@ class Vibe extends DataClass implements Insertable<Vibe> {
   int get hashCode => name.hashCode;
   @override
   bool operator ==(Object other) =>
-      identical(this, other) || (other is Vibe && other.name == this.name);
+      identical(this, other) || (other is Theme && other.name == this.name);
 }
 
-class ThemesCompanion extends UpdateCompanion<Vibe> {
+class ThemesCompanion extends UpdateCompanion<Theme> {
   final Value<String> name;
   final Value<int> rowid;
   const ThemesCompanion({
@@ -586,7 +586,7 @@ class ThemesCompanion extends UpdateCompanion<Vibe> {
     required String name,
     this.rowid = const Value.absent(),
   }) : name = Value(name);
-  static Insertable<Vibe> custom({
+  static Insertable<Theme> custom({
     Expression<String>? name,
     Expression<int>? rowid,
   }) {
@@ -928,13 +928,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $BooksTable books = $BooksTable(this);
-  late final $ThemesTable vibes = $ThemesTable(this);
+  late final $ThemesTable themes = $ThemesTable(this);
   late final $SongsTable songs = $SongsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [books, vibes, songs];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [books, themes, songs];
 }
 
 typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
@@ -1166,7 +1166,8 @@ typedef $$ThemesTableUpdateCompanionBuilder = ThemesCompanion Function({
   Value<int> rowid,
 });
 
-class $$ThemesTableFilterComposer extends Composer<_$AppDatabase, $ThemesTable> {
+class $$ThemesTableFilterComposer
+    extends Composer<_$AppDatabase, $ThemesTable> {
   $$ThemesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -1207,14 +1208,14 @@ class $$ThemesTableAnnotationComposer
 class $$ThemesTableTableManager extends RootTableManager<
     _$AppDatabase,
     $ThemesTable,
-    Vibe,
+    Theme,
     $$ThemesTableFilterComposer,
     $$ThemesTableOrderingComposer,
     $$ThemesTableAnnotationComposer,
     $$ThemesTableCreateCompanionBuilder,
     $$ThemesTableUpdateCompanionBuilder,
-    (Vibe, BaseReferences<_$AppDatabase, $ThemesTable, Vibe>),
-    Vibe,
+    (Theme, BaseReferences<_$AppDatabase, $ThemesTable, Theme>),
+    Theme,
     PrefetchHooks Function()> {
   $$ThemesTableTableManager(_$AppDatabase db, $ThemesTable table)
       : super(TableManagerState(
@@ -1252,14 +1253,14 @@ class $$ThemesTableTableManager extends RootTableManager<
 typedef $$ThemesTableProcessedTableManager = ProcessedTableManager<
     _$AppDatabase,
     $ThemesTable,
-    Vibe,
+    Theme,
     $$ThemesTableFilterComposer,
     $$ThemesTableOrderingComposer,
     $$ThemesTableAnnotationComposer,
     $$ThemesTableCreateCompanionBuilder,
     $$ThemesTableUpdateCompanionBuilder,
-    (Vibe, BaseReferences<_$AppDatabase, $ThemesTable, Vibe>),
-    Vibe,
+    (Theme, BaseReferences<_$AppDatabase, $ThemesTable, Theme>),
+    Theme,
     PrefetchHooks Function()>;
 typedef $$SongsTableCreateCompanionBuilder = SongsCompanion Function({
   Value<int> id,
@@ -1425,8 +1426,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$BooksTableTableManager get books =>
       $$BooksTableTableManager(_db, _db.books);
-  $$ThemesTableTableManager get vibes =>
-      $$ThemesTableTableManager(_db, _db.vibes);
+  $$ThemesTableTableManager get themes =>
+      $$ThemesTableTableManager(_db, _db.themes);
   $$SongsTableTableManager get songs =>
       $$SongsTableTableManager(_db, _db.songs);
 }

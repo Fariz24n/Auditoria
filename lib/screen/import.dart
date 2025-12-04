@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../service/file_import_service.dart';
-import '../service/music_import.dart'; // tambahkan ini
+import '../service/music_import.dart';
 import '../drift/app_database.dart';
 
 class ImportScreen extends StatefulWidget {
@@ -33,36 +33,42 @@ class _ImportScreenState extends State<ImportScreen> {
   }
 
   Future<void> _importBook() async {
-    final ctx = context;
-    if (!mounted) return;
+    // Tidak perlu simpan context di variabel jika sudah pakai mounted check yang benar
     setState(() => _isLoading = true);
 
     try {
       await _fileService.importBook();
-      ScaffoldMessenger.of(ctx).showSnackBar(
+      
+      // PERBAIKAN 1: Cek mounted setelah await
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Buku berhasil diimpor')),
       );
       await _loadBooks();
     } catch (e) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
+      if (!mounted) return; // Cek mounted sebelum showSnackBar error
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal mengimpor buku: $e')),
       );
     } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+      // PERBAIKAN 2: Jangan gunakan return di finally. Gunakan if (mounted).
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _importMusic() async {
-    final ctx = context;
     final theme = await showDialog<String>(
-      context: ctx,
+      context: context,
       builder: (context) {
         String selected = 'default';
         return AlertDialog(
           title: const Text('Pilih Tema Musik'),
           content: DropdownButtonFormField<String>(
-            value: selected,
+            // PERBAIKAN 3: Ganti value dengan initialValue
+            initialValue: selected, 
             items: const [
               DropdownMenuItem(value: 'happy', child: Text('Happy')),
               DropdownMenuItem(value: 'calming', child: Text('Calming')),
@@ -74,8 +80,12 @@ class _ImportScreenState extends State<ImportScreen> {
             onChanged: (v) => selected = v!,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-            TextButton(onPressed: () => Navigator.pop(context, selected), child: const Text('OK')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, selected),
+                child: const Text('OK')),
           ],
         );
       },
@@ -85,21 +95,24 @@ class _ImportScreenState extends State<ImportScreen> {
 
     try {
       await _musicService.importMusicForTheme(theme);
-      ScaffoldMessenger.of(ctx).showSnackBar(
+      
+      // PERBAIKAN 1: Cek mounted setelah await
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Musik untuk tema "$theme" berhasil diimpor')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal mengimpor musik: $e')),
       );
     }
   }
 
   Future<void> _deleteBook(Book book) async {
-    final ctx = context;
-
     final confirm = await showDialog<bool>(
-      context: ctx,
+      context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Hapus Buku'),
         content: Text('Yakin ingin menghapus "${book.title}"?'),
@@ -122,7 +135,11 @@ class _ImportScreenState extends State<ImportScreen> {
     if (confirm != true) return;
 
     await widget.db.deleteBook(book.id);
-    ScaffoldMessenger.of(ctx).showSnackBar(
+
+    // PERBAIKAN 1: Cek mounted setelah await db operation
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Buku dihapus')),
     );
     await _loadBooks();
@@ -147,7 +164,8 @@ class _ImportScreenState extends State<ImportScreen> {
                         title: Text(book.title),
                         subtitle: Text(book.filePath),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          icon: const Icon(Icons.delete,
+                              color: Colors.redAccent),
                           onPressed: () => _deleteBook(book),
                         ),
                       ),

@@ -167,18 +167,21 @@ class MusicService {
     }
     var nextIndex = _currentIndex + 1;
     if (nextIndex >= _playlist.length) {
-      if (_repeatAll) nextIndex = 0;
-      else return;
-    }
+      if (_repeatAll) {
+        nextIndex = 0;
+      } else {
+        return;
+      }
+  }
     await playAtIndex(nextIndex);
   }
 
   Future<void> previous() async {
-    if (_playlist.isEmpty) return;
+    if (_playlist.isEmpty) {return;}
     var prev = _currentIndex - 1;
     if (prev < 0) {
-      if (_repeatAll) prev = _playlist.length - 1;
-      else return;
+      if (_repeatAll) {prev = _playlist.length - 1;}
+      else {return;}
     }
     await playAtIndex(prev);
   }

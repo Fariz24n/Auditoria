@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Theme;
 import '../drift/app_database.dart';
 import '../service/music_service.dart';
 
@@ -19,7 +19,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       appBar: AppBar(
         title: const Text('Music Library'),
       ),
-      body: FutureBuilder<List<Vibe>>(
+      body: FutureBuilder<List<Theme>>(
         future: widget.db.getAllThemes(),
         builder: (c, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
