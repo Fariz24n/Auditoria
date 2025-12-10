@@ -61,12 +61,6 @@ class BookWithCategories {
   BookWithCategories(this.book, this.categories);
 }
 
-Future<BookWithCategories> getBookWithCategories(int bookId) async {
-  final book = await (select(books)..where((b) => b.id.equals(bookId))).getSingle();
-  final cats = await getCategoriesOfBook(bookId);
-  return BookWithCategories(book, cats);
-}
-
 /// ===== Songs =====
 class Songs extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -124,6 +118,12 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Book>> watchAllBooks() => (select(books)
         ..orderBy([(t) => OrderingTerm(expression: t.displayOrder)]))
       .watch();
+
+  Future<BookWithCategories> getBookWithCategories(int bookId) async {
+    final book = await (select(books)..where((b) => b.id.equals(bookId))).getSingle();
+    final cats = await getCategoriesOfBook(bookId);
+    return BookWithCategories(book, cats);
+  }
 
   Future<int> addBook(BooksCompanion book) => into(books).insert(book);
 
