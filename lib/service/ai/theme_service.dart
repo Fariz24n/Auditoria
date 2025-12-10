@@ -66,7 +66,7 @@ INSTRUCTIONS:
 
     try {
       final response = await _model.generateContent([Content.text(prompt)])
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 25));
 
       final rawText = response.text;
       if (rawText == null || rawText.isEmpty) return 'default';
@@ -79,7 +79,7 @@ INSTRUCTIONS:
       debugPrint('🎯 [AI] Raw Theme: "$theme", Confidence: $confidence');
 
       // 1. Turunkan Batas Confidence ke 0.4 (Lebih toleran)
-      if (confidence < 0.4) {
+      if (confidence < 0.15) {
         debugPrint('⚠️ [AI] Confidence low ($confidence). Using default.');
         return 'default';
       }

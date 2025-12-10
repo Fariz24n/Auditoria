@@ -28,7 +28,7 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
 
   late StreamSubscription<bool> _aiSub;
   bool _aiActive = AiActivationService.instance.isActive;
-  bool _showMusicWidget = true;
+  bool _showMusicWidget = false;
 
   // Syncfusion controller untuk navigasi halaman
   final PdfViewerController _pdfViewerController = PdfViewerController();

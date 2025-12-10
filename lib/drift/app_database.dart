@@ -6,28 +6,68 @@ import 'package:path/path.dart' as p;
 
 part 'app_database.g.dart';
 
-/// ===== Tabel Buku =====  
+/// ===== Tabel Buku (UPDATED v5) =====
 class Books extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text()();
   TextColumn get filePath => text()();
   TextColumn get coverPath => text().nullable()();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+
+  // Nama rak / shelf  
   TextColumn get theme => text().nullable()();
+
   BoolColumn get fileExists => boolean().withDefault(const Constant(true))();
   IntColumn get lastPageRead => integer().withDefault(const Constant(0))();
   IntColumn get displayOrder => integer().withDefault(const Constant(0))();
+
+  // --- Kolom Baru Versi 5 ---
+  TextColumn get author => text().nullable()();      
+  TextColumn get description => text().nullable()(); 
+  TextColumn get series => text().nullable()();      
+  TextColumn get tags => text().nullable()();        
 }
 
-/// ===== New: Themes (playlist categories) =====
-/// Example values: 'calming', 'battle', 'happy'
+/// ===== Themes =====
 class Themes extends Table {
   TextColumn get name => text()();
   @override
   Set<Column> get primaryKey => {name};
 }
 
-/// ===== New: Songs (one-to-many: themeName -> songs) =====
+/// ===== Book Categories (NEW v6) =====
+/// ===== Book Categories =====
+class Categories extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().unique()();
+}
+
+/// ===== Many-to-Many: Book ↔ Category =====
+class BookCategoryMap extends Table {
+  IntColumn get bookId =>
+      integer().references(Books, #id, onDelete: KeyAction.cascade)();
+
+  IntColumn get categoryId =>
+      integer().references(Categories, #id, onDelete: KeyAction.cascade)();
+
+  @override
+  Set<Column> get primaryKey => {bookId, categoryId};
+}
+
+class BookWithCategories {
+  final Book book;
+  final List<Category> categories;
+
+  BookWithCategories(this.book, this.categories);
+}
+
+Future<BookWithCategories> getBookWithCategories(int bookId) async {
+  final book = await (select(books)..where((b) => b.id.equals(bookId))).getSingle();
+  final cats = await getCategoriesOfBook(bookId);
+  return BookWithCategories(book, cats);
+}
+
+/// ===== Songs =====
 class Songs extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get themeName => text()();
@@ -37,19 +77,41 @@ class Songs extends Table {
 }
 
 /// ===== Database =====
-@DriftDatabase(tables: [Books, Themes, Songs])
+@DriftDatabase(tables: [
+  Books,
+  Themes,
+  Songs,
+  Categories,        // new
+  BookCategoryMap,   // new
+])
+
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// UPGRADE VERSI KE 5
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
+          // Migrasi v4
           if (from < 4) {
             await m.createTable(themes);
             await m.createTable(songs);
+          }
+
+          // Migrasi v5 — Tambah kolom baru
+          if (from < 5) {
+            await m.addColumn(books, books.author);
+            await m.addColumn(books, books.description);
+            await m.addColumn(books, books.series);
+            await m.addColumn(books, books.tags);
+          }
+          // Migrasi v6 — kategori buku
+          if (from < 6) {
+            await m.createTable(categories);
+            await m.createTable(bookCategoryMap);
           }
         },
       );
@@ -96,34 +158,29 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  // ===== Playlist / Music DAO (core) =====
+  // ===== Music / Playlist DAO =====
 
-  /// Core: get all themes (one-shot)
   Future<List<Theme>> getAllThemesCore() => select(themes).get();
-
-  /// Core: watch themes (stream)
   Stream<List<Theme>> watchAllThemesCore() => select(themes).watch();
 
-  /// Core: get songs by theme name
   Future<List<Song>> getSongsByTheme(String themeName) {
-    final q = (select(songs)..where((s) => s.themeName.equals(themeName))
+    final q = (select(songs)
+          ..where((s) => s.themeName.equals(themeName))
           ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]));
     return q.get();
   }
 
-  /// Core: watch songs by theme name
   Stream<List<Song>> watchSongsByThemeCore(String themeName) {
-    final q = (select(songs)..where((s) => s.themeName.equals(themeName))
+    final q = (select(songs)
+          ..where((s) => s.themeName.equals(themeName))
           ..orderBy([(t) => OrderingTerm(expression: t.orderIndex)]));
     return q.watch();
   }
 
-  /// Core: add theme
   Future<void> addThemeCore(String name) async {
     await into(themes).insert(ThemesCompanion.insert(name: name));
   }
 
-  /// Core: add song (returns inserted id)
   Future<int> addSongCore({
     required String themeName,
     required String filePath,
@@ -152,11 +209,9 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Core: delete song by id
   Future<int> deleteSongCore(int id) =>
       (delete(songs)..where((tbl) => tbl.id.equals(id))).go();
 
-  /// Core: reorder songs
   Future<void> reorderSongsCore(String themeName, List<int> orderedIds) async {
     await transaction(() async {
       for (int i = 0; i < orderedIds.length; i++) {
@@ -168,28 +223,18 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Core: clear songs for theme
   Future<int> clearSongsForThemeCore(String themeName) =>
       (delete(songs)..where((tbl) => tbl.themeName.equals(themeName))).go();
 
-  // ===== Compatibility wrappers (names expected by existing code) =====
+  // ===== Compatibility Wrappers =====
 
-  /// Compatibility: original callers expecting getAllThemes()
   Future<List<Theme>> getAllThemes() => getAllThemesCore();
-
-  /// Compatibility: original callers expecting a streaming watcher
   Stream<List<Theme>> watchAllThemes() => watchAllThemesCore();
-
-  /// Compatibility: provide method name used by older UI code
-  /// getSongsByThemeId(String themeName) maps to getSongsByTheme
   Future<List<Song>> getSongsByThemeId(String themeName) =>
       getSongsByTheme(themeName);
-
-  /// Compatibility: provide streaming getter used elsewhere
   Stream<List<Song>> watchSongsByThemeId(String themeName) =>
       watchSongsByThemeCore(themeName);
 
-  /// Compatibility: addThemeIfNotExists(name)
   Future<void> addThemeIfNotExists(String name) async {
     final existing =
         await (select(themes)..where((t) => t.name.equals(name))).get();
@@ -198,7 +243,6 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  /// Compatibility: addSong(...) used by older import code
   Future<int> addSong({
     required String themeName,
     required String filePath,
@@ -214,15 +258,12 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Compatibility alias used in some callers
   Future<int> addSongToTheme(String themeName, String filePath,
           {String? title, int? orderIndex}) =>
       addSong(themeName: themeName, filePath: filePath, title: title, orderIndex: orderIndex);
 
-  /// Compatibility: deleteTheme by name (keeps transactional behavior)
   Future<void> deleteThemeByName(String name) async => deleteTheme(name);
 
-  /// Existing deleteTheme (keeps original name)
   Future<void> deleteTheme(String name) async {
     await transaction(() async {
       await (delete(songs)..where((s) => s.themeName.equals(name))).go();
@@ -230,11 +271,53 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Existing getSongsByTheme kept for backward compatibility
   Future<List<Song>> getSongsByThemeName(String themeName) =>
       getSongsByTheme(themeName);
 
-  // ===== Validasi File (Books) =====
+
+  Future<List<Category>> getAllCategories() => select(categories).get();
+
+  Stream<List<Category>> watchAllCategories() => select(categories).watch();
+  
+  Future<int> addCategory(String name) async {
+  return into(categories).insert(CategoriesCompanion.insert(name: name));
+  }
+
+  Future<int> deleteCategory(int id) {
+  return (delete(categories)..where((tbl) => tbl.id.equals(id))).go();
+ }
+
+  Future<List<Category>> getCategoriesOfBook(int bookId) {
+    final query = select(categories).join([
+      innerJoin(
+        bookCategoryMap,
+        bookCategoryMap.categoryId.equalsExp(categories.id),
+      )
+    ])
+      ..where(bookCategoryMap.bookId.equals(bookId));
+
+    return query.map((row) => row.readTable(categories)).get();
+  }
+
+  Future<void> assignCategoryToBook(int bookId, int categoryId) async {
+    await into(bookCategoryMap).insert(
+      BookCategoryMapCompanion(
+        bookId: Value(bookId),
+        categoryId: Value(categoryId),
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+
+  Future<void> removeCategoryFromBook(int bookId, int categoryId) async {
+  await (delete(bookCategoryMap)
+        ..where((tbl) =>
+            tbl.bookId.equals(bookId) &
+            tbl.categoryId.equals(categoryId)))
+      .go();
+}
+
+  // ===== File Existence Checker =====
   Future<void> refreshFileExistence() async {
     final allBooks = await select(books).get();
     for (var b in allBooks) {
@@ -256,26 +339,23 @@ class AppDatabase extends _$AppDatabase {
     return query.map((row) => row.read(books.theme)!).watch();
   }
 
-  // 2. Mengambil buku berdasarkan filter (Favorit atau Nama Rak)
   Stream<List<Book>> watchBooksFiltered({String? shelf, bool onlyFavorites = false}) {
     return (select(books)
-      ..where((tbl) {
-        if (onlyFavorites) {
-          return tbl.isFavorite.equals(true);
-        }
-        if (shelf != null && shelf.isNotEmpty) {
-          // Filter berdasarkan nama rak (theme)
-          return tbl.theme.equals(shelf);
-        }
-        // Jika tidak ada filter, return true (semua buku)
-        return const Constant(true);
-      })
-      ..orderBy([(t) => OrderingTerm(expression: t.displayOrder)]))
-      .watch();
+          ..where((tbl) {
+            if (onlyFavorites) {
+              return tbl.isFavorite.equals(true);
+            }
+            if (shelf != null && shelf.isNotEmpty) {
+              return tbl.theme.equals(shelf);
+            }
+            return const Constant(true);
+          })
+          ..orderBy([(t) => OrderingTerm(expression: t.displayOrder)]))
+        .watch();
   }
 }
 
-//// ===== Connection ke Database =====
+/// ===== Connection =====
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();

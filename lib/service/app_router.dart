@@ -4,7 +4,6 @@ import '../drift/app_database.dart';
 import '../screen/library_screen.dart';
 import '../screen/pdf_view_screen.dart';
 import '../screen/favorit.dart';
-import '../screen/import.dart';
 import '../screen/playlist_screen.dart';
 import '../service/music_service.dart';
 import '../screen/book_detail.dart';
@@ -48,12 +47,6 @@ final GoRouter appRouter = GoRouter(
           path: 'favorit',
           builder: (BuildContext context, GoRouterState state) {
             return const FavoritesScreen();
-          },
-        ),
-        GoRoute(
-          path: 'import',
-          builder: (BuildContext context, GoRouterState state) {
-            return ImportScreen(db: db);
           },
         ),
         GoRoute(

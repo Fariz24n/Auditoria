@@ -5,6 +5,8 @@ import '../drift/app_database.dart';
 import '../service/ai/ai_activation.dart';
 import 'bookshelf_view.dart';
 import '../widget/library_drawer.dart';
+import '../service/folder_scanner_service.dart';
+import '../screen/import_config_dialog.dart';
 
 class LibraryScreen extends StatefulWidget {
   final AppDatabase db;
@@ -52,9 +54,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
 
     return Scaffold(
-      // 2. PASANG SIDEBAR DI SINI
-      drawer: LibraryDrawer(db: widget.db), 
-      
+      drawer: LibraryDrawer(db: widget.db),
+
       appBar: AppBar(
         title: Text(appBarTitle),
         actions: [
@@ -80,14 +81,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ],
       ),
 
-      // 3. GUNAKAN STREAM YANG SUDAH DIFILTER
       body: StreamBuilder<List<Book>>(
         stream: db.watchBooksFiltered(
           shelf: filterShelf,
           onlyFavorites: filterFav,
         ),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -101,9 +102,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
 
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/import'),
-        tooltip: 'Import Buku',
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.folder),
+        onPressed: () async {
+          final ImportDialogResult? result = await showDialog(
+            context: context,
+            builder: (_) => const ImportConfigDialog(),
+          );
+
+          if (result == null) return;
+
+          final scanner = FolderScannerService(db);
+
+          final serviceConfig = ImportConfig(
+            selectedPath: result.folderPath,
+            allowedExtensions: [
+              if (result.scanPdf) '.pdf',
+              if (result.scanMp3) '.mp3',
+            ],
+          );
+
+          await scanner.scanAndImport(serviceConfig);
+        },
       ),
     );
   }
@@ -127,7 +146,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Text(
             message,
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 14,
               color: Colors.grey[600],
               fontWeight: FontWeight.w300,
             ),
