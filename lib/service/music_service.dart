@@ -67,20 +67,45 @@ class MusicService {
 
   // Set playlist based on theme name (fetch from DB)
   Future<void> setPlaylistByTheme(String theme, {int startIndex = 0}) async {
-    debugPrint("MusicService: Mencari lagu untuk tema '$theme'...");
+    debugPrint("\n${'=' * 60}");
+    debugPrint("🎵 [MusicService] PLAYLIST LOADING");
+    debugPrint("${'=' * 60}");
+    debugPrint("📝 Requested Theme: '$theme'");
+    
     await Future.delayed(const Duration(milliseconds: 50));
-    final songs = await db.getSongsByThemeName(theme);
+    
+    // Debug: Show all available themes in DB
+    final allThemes = await db.getAllThemes();
+    debugPrint("📚 Available themes in DB: ${allThemes.map((t) => '"${t.name}"').join(', ')}");
+    
+    // Try exact match first
+    var songs = await db.getSongsByThemeName(theme);
+    debugPrint("🔍 Exact match for '$theme': ${songs.length} songs");
+
+    // If empty, try case-insensitive search
+    if (songs.isEmpty) {
+      debugPrint("⚠️  Exact match failed. Trying case-insensitive search...");
+      songs = await db.getSongsByThemeNameCaseInsensitive(theme);
+      debugPrint("🔍 Case-insensitive match: ${songs.length} songs");
+      
+      if (songs.isNotEmpty) {
+        final actualThemeName = songs.first.themeName;
+        debugPrint("✅ CASE MISMATCH DETECTED!");
+        debugPrint("   AI sent:      '$theme'");
+        debugPrint("   DB has:       '$actualThemeName'");
+        debugPrint("   Solution:     Normalize theme names or use case-insensitive queries");
+      }
+    }
 
     if (songs.isEmpty) {
-      debugPrint('MusicService: Lagu Kosong untuk tema "$theme"');
+      debugPrint('🚨 [MusicService] ❌ No songs found for theme "$theme"');
 
       if (theme != 'default') {
-         debugPrint('MusicService: Mencoba memutar tema "default" sebagai cadangan...');
-         return setPlaylistByTheme('default'); // <--- Panggil diri sendiri (Rekursif)
+         debugPrint('🔄 Falling back to "default" playlist...');
+         return setPlaylistByTheme('default');
       }
 
-      // Jika tema sudah 'default' dan masih kosong juga, baru kita menyerah.
-      debugPrint('MusicService: Tema "default" juga kosong. Player berhenti.');
+      debugPrint('🛑 [MusicService] "default" theme also empty. Stopping player.');
       _playlist = [];
       _playlistCtl.add(_playlist);
       _currentIndex = -1;
@@ -98,10 +123,11 @@ class MusicService {
       durationMs: null,
     )).toList();
 
-    debugPrint("MusicService: Ditemukan ${files.length} lagu. Memulai player...");
-
-    // (Blok 'if (files.isEmpty)' yang kedua tadi saya hapus karena redundan/tidak perlu.
-    // Kalau 'songs' tidak empty, 'files' pasti tidak empty).
+    debugPrint("✅ [MusicService] Found ${files.length} songs. Starting playback...");
+    for (var i = 0; i < files.length; i++) {
+      debugPrint("   ${i + 1}. ${files[i].title}");
+    }
+    debugPrint("${'=' * 60}\n");
 
     _playlist = files;
     _playlistCtl.add(_playlist);
@@ -211,3 +237,5 @@ class MusicService {
     _audioPlayer.dispose();
   }
 }
+
+

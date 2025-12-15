@@ -7,6 +7,7 @@ import '../screen/favorit.dart';
 import '../screen/playlist_screen.dart';
 import '../service/music_service.dart';
 import '../screen/book_detail.dart';
+import '../screen/import.dart';
 
 // note: reuse db instance and create musicService here or inject from app root
 final AppDatabase db = AppDatabase();
@@ -50,6 +51,12 @@ final GoRouter appRouter = GoRouter(
           },
         ),
         GoRoute(
+          path: 'import',
+          builder: (BuildContext context, GoRouterState state) {
+            return ImportScreen(db: db);
+          },
+        ),
+        GoRoute(
           path: 'music',
           builder: (BuildContext context, GoRouterState state) {
             return PlaylistScreen(db: db, musicService: musicService);
@@ -59,3 +66,47 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
+
+===music_import.dart===
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
+import '../drift/app_database.dart';
+
+class MusicImportService {
+  final AppDatabase db;
+  MusicImportService(this.db);
+
+  /// Import multiple mp3 files and attach them to a theme.
+  Future<void> importMusicForTheme(String themeName) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3'],
+      allowMultiple: true,
+    );
+
+    if (result == null) return;
+
+    // ensure theme exists (create if not)
+    await db.addThemeIfNotExists(themeName);
+
+    for (var file in result.files) {
+      final path = file.path;
+      if (path == null) continue;
+      
+      // 🔥 CEK DUPLIKASI: Cegah import lagu yang sama
+      final existingSongs = await (db.select(db.songs)
+        ..where((s) => s.filePath.equals(path))).get();
+      
+      if (existingSongs.isNotEmpty) {
+        continue; // Skip lagu yang sudah ada
+      }
+      
+      final title = p.basename(path);
+      await db.addSong(
+        themeName: themeName,
+        filePath: path,
+        title: title,
+      );
+    }
+  }
+}

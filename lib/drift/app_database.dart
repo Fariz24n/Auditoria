@@ -274,6 +274,13 @@ class AppDatabase extends _$AppDatabase {
   Future<List<Song>> getSongsByThemeName(String themeName) =>
       getSongsByTheme(themeName);
 
+  /// Case-insensitive search for songs by theme name
+  Future<List<Song>> getSongsByThemeNameCaseInsensitive(String themeName) async {
+    final lowerTheme = themeName.toLowerCase();
+    final allSongs = await select(songs).get();
+    return allSongs.where((s) => s.themeName.toLowerCase() == lowerTheme).toList();
+  }
+
 
   Future<List<Category>> getAllCategories() => select(categories).get();
 
@@ -363,3 +370,108 @@ LazyDatabase _openConnection() {
     return NativeDatabase(file);
   });
 }
+
+===import.dart===
+  import 'package:flutter/material.dart';
+  import '../drift/app_database.dart';
+  import '../service/folder_scanner_service.dart';
+  import '../screen/import_config_dialog.dart';
+
+  class ImportScreen extends StatefulWidget {
+    final AppDatabase db;
+
+    const ImportScreen({super.key, required this.db});
+
+    @override
+    State<ImportScreen> createState() => _ImportScreenState();
+  }
+
+  class _ImportScreenState extends State<ImportScreen> {
+    bool _loading = false;
+    String _msg = "";
+
+    Future<void> _startImport() async {
+      // Ambil references yang aman sebelum async gap
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+
+      // Ambil ImportConfig langsung dari dialog
+      final ImportConfig? config = await showDialog<ImportConfig?>(
+        context: context,
+        builder: (_) => const ImportConfigDialog(),
+      );
+
+      if (config == null) return;
+
+      // Validasi defensif: pastikan minimal satu ekstensi dipilih
+      if (config.allowedExtensions.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Pilih minimal satu jenis file (PDF atau MP3)')),
+        );
+        return;
+      }
+
+      final scanner = FolderScannerService(widget.db);
+
+      setState(() {
+        _loading = true;
+        _msg = "Memindai folder...";
+      });
+
+      int count = 0;
+      try {
+        count = await scanner.scanAndImport(config);
+
+        if (!mounted) return;
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              count > 0 ? "Berhasil mengimpor $count file baru!" : "Tidak ada file baru ditemukan.",
+            ),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+
+        messenger.showSnackBar(
+          SnackBar(content: Text('Gagal mengimpor: $e')),
+        );
+      } finally {
+        // Jika widget sudah di-unmount, jangan panggil setState atau navigator
+        if (!mounted) {
+        setState(() {
+          _loading = false;
+          _msg = "";
+        });
+
+        // Tutup layar import (jika memang itu yang diinginkan)
+        navigator.pop();
+    }
+    }
+  }
+
+    @override
+    Widget build(BuildContext context) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Impor")),
+        body: _loading
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    Text(_msg),
+                  ],
+                ),
+              )
+            : const Center(child: Text("Tekan tombol untuk impor.")),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _startImport,
+          child: const Icon(Icons.folder_open),
+        ),
+      );
+    }
+  }
+

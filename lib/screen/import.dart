@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../drift/app_database.dart';
 import '../service/folder_scanner_service.dart';
-import 'import_config_dialog.dart';
+import '../screen/import_config_dialog.dart';
 
 class ImportScreen extends StatefulWidget {
   final AppDatabase db;
 
+  // ✅ CONST used here for performance
   const ImportScreen({super.key, required this.db});
 
   @override
@@ -13,47 +14,93 @@ class ImportScreen extends StatefulWidget {
 }
 
 class _ImportScreenState extends State<ImportScreen> {
-  late final FolderScannerService _scannerService;
-  bool _isLoading = false;
-  String _statusMessage = "";
+  bool _loading = false;
+  String _msg = "";
 
-  @override
-  void initState() {
-    super.initState();
-    _scannerService = FolderScannerService(widget.db);
-  }
-
-  // Tetap pakai dialog – tapi tanpa list hasil
-  Future<void> _showImportPanel() async {
-    final ImportConfig? config = await showDialog<ImportConfig>(
+  Future<void> _startImport() async {
+    // 1. Show Dialog and get LIST of files (Not just config)
+    final List<SelectedFileData>? selectedFiles =
+        await showDialog<List<SelectedFileData>>(
       context: context,
-      builder: (context) => const ImportConfigDialog(),
+      // ✅ CONST used here
+      builder: (_) => const ImportConfigDialog(),
     );
 
-    if (config == null) return;
+    // 2. Check if user cancelled or didn't pick files
+    if (selectedFiles == null || selectedFiles.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          // ✅ CONST used here
+          const SnackBar(content: Text("Tidak ada file yang dipilih.")),
+        );
+      }
+      return;
+    }
 
+    final scanner = FolderScannerService(widget.db);
+    
     setState(() {
-      _isLoading = true;
-      _statusMessage = "Memindai folder...";
+      _loading = true;
+      _msg = "Memproses ${selectedFiles.length} file...";
     });
 
+    int successCount = 0;
+    int totalFiles = selectedFiles.length;
+
     try {
-      await _scannerService.scanAndImport(config);
+      // 3. Loop through every selected file and import it
+      for (var i = 0; i < totalFiles; i++) {
+        final fileData = selectedFiles[i];
+        
+        setState(() {
+          _msg = "Mengimpor ${i + 1} dari $totalFiles...\n${fileData.name}";
+        });
+
+        // NOTE: We cannot use 'const' here because fileData values are dynamic/runtime.
+        final config = ImportConfig(
+          fileName: fileData.name,
+          filePath: fileData.path,
+          fileBytes: fileData.bytes,
+          extension: fileData.extension,
+          minSizeKb: 1, 
+          isFavorite: false,
+          category: null, 
+        );
+
+        // Run the import logic
+        final imported = await scanner.scanAndImport(config);
+        successCount += imported;
+      }
 
       if (!mounted) return;
-
-      // Setelah selesai → langsung tutup layar ini
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _statusMessage = "";
-      });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal scan: $e')),
+        SnackBar(
+          content: Text(
+            successCount > 0
+                ? "Berhasil mengimpor $successCount file baru!"
+                : "Tidak ada file baru (Mungkin duplikat).",
+          ),
+          backgroundColor: successCount > 0 ? Colors.green : Colors.orange,
+        ),
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengimpor: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _msg = "";
+        });
+        
+        // Optional: Close screen after successful import
+        if (successCount > 0) {
+           Navigator.pop(context);
+        }
+      }
     }
   }
 
@@ -61,32 +108,43 @@ class _ImportScreenState extends State<ImportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Impor'),
+        // ✅ CONST used here
+        title: const Text("Impor File"),
       ),
-
-      body: _isLoading
+      body: _loading
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  // ✅ CONST used here
                   const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(_statusMessage),
+                  // ✅ CONST used here
+                  const SizedBox(height: 20),
+                  Text(_msg, textAlign: TextAlign.center),
                 ],
               ),
             )
-          : const Center(
-              child: Text('Tekan tombol folder untuk impor'),
+          : Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // ✅ CONST used here
+                  const Icon(Icons.upload_file, size: 64, color: Colors.grey),
+                  // ✅ CONST used here
+                  const SizedBox(height: 16),
+                  // ✅ CONST used here
+                  const Text("Tekan tombol di bawah untuk memilih file"),
+                  const SizedBox(height: 8),
+                  // ✅ CONST used here
+                  const Text("(PDF atau MP3)", style: TextStyle(color: Colors.grey)),
+                ],
+              ),
             ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => ImportConfigDialog(db: db),
-          );
-        },
-        child: const Icon(Icons.folder_open),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _startImport,
+        // ✅ CONST used here
+        icon: const Icon(Icons.add),
+        label: const Text("Pilih File"),
       ),
     );
   }

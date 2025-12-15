@@ -1,15 +1,18 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-class ImportDialogResult {
-  final String folderPath;
-  final bool scanPdf;
-  final bool scanMp3;
-
-  ImportDialogResult({
-    required this.folderPath,
-    required this.scanPdf,
-    required this.scanMp3,
+// Wrapper untuk membawa data file dari dialog
+class SelectedFileData {
+  final String name;
+  final String? path;
+  final List<int>? bytes;
+  final String extension;
+  
+  SelectedFileData({
+    required this.name,
+    required this.path,
+    required this.bytes,
+    required this.extension,
   });
 }
 
@@ -25,13 +28,63 @@ class _ImportConfigDialogState extends State<ImportConfigDialog> {
   bool _pdf = true;
   bool _mp3 = false;
 
-  Future<void> _pickFolder() async {
-    final path = await FilePicker.platform.getDirectoryPath();
-    if (path != null) {
-      setState(() => _path = path);
+  // ================================
+  // PICK FILES (Multiple) - ANDROID FRIENDLY
+  // ================================
+  List<SelectedFileData> _selectedFiles = [];
+  
+  Future<void> _pickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: [
+        if (_pdf) 'pdf',
+        if (_mp3) 'mp3',
+      ],
+      allowMultiple: true,
+      withData: true, // ✅ PENTING: Minta bytes data untuk Android
+    );
+
+    if (result == null) return;
+
+    print("📁 FilePicker returned ${result.files.length} files");
+
+    _selectedFiles = result.files.map((pf) {
+      final ext = pf.extension ?? '';
+      print("  📄 File: ${pf.name}");
+      print("    Path: ${pf.path}");
+      print("    Bytes: ${pf.bytes?.length ?? 0} bytes");
+      print("    Extension: .$ext");
+      
+      return SelectedFileData(
+        name: pf.name,
+        path: pf.path,
+        bytes: pf.bytes,
+        extension: '.$ext',
+      );
+    }).toList();
+
+    if (_selectedFiles.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Tidak ada file yang dipilih")),
+        );
+      }
+      return;
     }
+
+    if (mounted) {
+      setState(() {
+        _path = '${_selectedFiles.length} file dipilih';
+      });
+    }
+    
+    print("📌 Selected files: ${_selectedFiles.length}");
   }
 
+
+  // =========================
+  // UI Dialog
+  // =========================
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -39,11 +92,16 @@ class _ImportConfigDialogState extends State<ImportConfigDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Path
+          // File Selection
           ListTile(
-            title: Text(_path, maxLines: 1, overflow: TextOverflow.ellipsis),
-            trailing: const Icon(Icons.folder_open),
-            onTap: _pickFolder,
+            title: Text(
+              _path,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: const Text('Pilih file untuk diimport'),
+            trailing: const Icon(Icons.file_open),
+            onTap: _pickFiles,
           ),
           const SizedBox(height: 12),
 
@@ -67,17 +125,46 @@ class _ImportConfigDialogState extends State<ImportConfigDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('BATAL'),
         ),
-        ElevatedButton(
-          onPressed: () {
-            if (_path == 'Belum dipilih') return;
 
+        // =========================
+        // TOMBOL OKE
+        // =========================
+        ElevatedButton(
+          onPressed: () async {
+            // --- Validasi: files sudah dipilih ---
+            if (_selectedFiles.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Pilih file terlebih dahulu")),
+              );
+              return;
+            }
+
+            // --- Validasi: minimal 1 ekstensi ---
+            if (!_pdf && !_mp3) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Pilih minimal satu tipe file (PDF/MP3)."),
+                ),
+              );
+              return;
+            }
+
+            // ==========================
+            // DEBUG LOG
+            // ==========================
+            print("========== ImportConfigDialog ==========");
+            print("Dipilih ${_selectedFiles.length} files");
+            for (var f in _selectedFiles) {
+              print("  - ${f.name} (${f.bytes?.length ?? 0} bytes)");
+            }
+            print("=========================================");
+
+            // ==========================
+            // KIRIM FILES LIST KE SCREEN
+            // ==========================
             Navigator.pop(
               context,
-              ImportDialogResult(
-                folderPath: _path,
-                scanPdf: _pdf,
-                scanMp3: _mp3,
-              ),
+              _selectedFiles,
             );
           },
           child: const Text('OKE'),

@@ -61,7 +61,7 @@ class _BookSpineState extends State<BookSpine> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  /// COVER
+                  // === COVER ===
                   cover.isNotEmpty
                       ? Image.file(
                           File(cover),
@@ -70,7 +70,7 @@ class _BookSpineState extends State<BookSpine> {
                         )
                       : _placeholder(),
 
-                  /// EDGE HIGHLIGHT
+                  // === EDGE HIGHLIGHT ===
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
@@ -90,7 +90,7 @@ class _BookSpineState extends State<BookSpine> {
                     ),
                   ),
 
-                  /// TITLE + MENU + THEME
+                  // === TITLE + CATEGORY (THEME) ===
                   Positioned(
                     left: 0,
                     right: 0,
@@ -113,6 +113,7 @@ class _BookSpineState extends State<BookSpine> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Title
                           Text(
                             widget.book.title,
                             maxLines: 2,
@@ -126,28 +127,7 @@ class _BookSpineState extends State<BookSpine> {
                             ),
                           ),
 
-                          /// POPUP MENU (FIXED)
-                          PopupMenuButton<String>(
-                            icon: const Icon(
-                              Icons.more_vert,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            onSelected: (String value) {
-                              if (value == 'edit') {
-                                context.go('/edit-book/${widget.book.id}');
-                              }
-                            },
-                            itemBuilder: (BuildContext context)
-                                => <PopupMenuEntry<String>>[
-                              const PopupMenuItem<String>(
-                                value: 'edit',
-                                child: Text('Edit Buku'),
-                              ),
-                            ],
-                          ),
-
-                          /// THEME / SHELF
+                          // Category / Shelf
                           if (widget.book.theme != null &&
                               widget.book.theme!.isNotEmpty)
                             Padding(
@@ -156,9 +136,9 @@ class _BookSpineState extends State<BookSpine> {
                                 widget.book.theme!,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.6),
+                                  color: Colors.white.withValues(alpha: 0.6),
                                   fontSize: 8,
+                                  fontWeight: FontWeight.w400,
                                 ),
                               ),
                             ),
@@ -207,3 +187,5 @@ class _BookSpineState extends State<BookSpine> {
     );
   }
 }
+
+

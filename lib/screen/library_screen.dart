@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../drift/app_database.dart';
@@ -38,24 +38,106 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
+  /// ✅ FUNGSI IMPORT (DIPERBAIKI - FILE-BASED)
+  Future<void> _handleImportBook(BuildContext context) async {
+    // 1. Terima list of file data dari dialog
+    final List<SelectedFileData>? selectedFiles = await showDialog<List<SelectedFileData>>(
+      context: context,
+      builder: (_) => const ImportConfigDialog(),
+    );
+
+    // Jika user menekan BATAL
+    if (selectedFiles == null || selectedFiles.isEmpty) return;
+
+    // 2. Jalankan import untuk setiap file
+    final scanner = FolderScannerService(db);
+    int successCount = 0;
+    int totalFiles = selectedFiles.length;
+
+    try {
+      // Tampilkan indikator loading
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Mengimport $totalFiles file...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Import setiap file
+      print('\n🔄 ========== IMPORT LOOP START ==========');
+      print('📋 Total files to process: ${selectedFiles.length}');
+      for (var i = 0; i < selectedFiles.length; i++) {
+        final fileData = selectedFiles[i];
+        print('\n🔢 Processing file ${i + 1}/${selectedFiles.length}');
+        print('📄 File: ${fileData.name}');
+        print('📍 Path: ${fileData.path}');
+        print('💾 Bytes: ${fileData.bytes?.length ?? 0}');
+        
+        // Buat config untuk single file (DENGAN BYTES!)
+        final config = ImportConfig(
+          fileName: fileData.name,
+          filePath: fileData.path,
+          fileBytes: fileData.bytes,
+          extension: fileData.extension,
+          minSizeKb: 1,
+          isFavorite: false,
+          category: null,
+        );
+        
+        print('⚙️  Calling scanAndImport...');
+        final imported = await scanner.scanAndImport(config);
+        print('📊 Result: imported=$imported files');
+        successCount += imported;
+      }
+      print('\n🏁 ========== IMPORT LOOP END ==========');
+      print('📊 Total success count: $successCount\n');
+
+      final count = successCount;
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            count > 0 
+              ? '✅ Berhasil import $count file baru' 
+              : '⚠️ Tidak ada file baru (Mungkin duplikat atau folder kosong)'
+          ),
+          backgroundColor: count > 0 ? Colors.green : Colors.orange,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Gagal import: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 1. BACA FILTER DARI URL (Router)
     final state = GoRouterState.of(context);
-    final filterShelf = state.uri.queryParameters['shelf'];
     final filterFav = state.uri.queryParameters['filter'] == 'favorites';
 
-    // Tentukan Judul AppBar (Wrapped in blocks)
+    String? filterShelf = state.uri.queryParameters['shelf'];
+    if (filterShelf != null && filterShelf.trim().isEmpty) {
+      filterShelf = null;
+    }
+    
     String appBarTitle = "Perpustakaan";
     if (filterFav) {
       appBarTitle = "Favorit";
-    } else if (filterShelf != null) {
+    } else if (filterShelf != null && filterShelf.isNotEmpty) {
       appBarTitle = filterShelf;
     }
 
     return Scaffold(
       drawer: LibraryDrawer(db: widget.db),
-
       appBar: AppBar(
         title: Text(appBarTitle),
         actions: [
@@ -80,7 +162,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         ],
       ),
-
       body: StreamBuilder<List<Book>>(
         stream: db.watchBooksFiltered(
           shelf: filterShelf,
@@ -100,37 +181,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
           return BookshelfView(books: books, db: db);
         },
       ),
-
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.folder),
-        onPressed: () async {
-          final ImportDialogResult? result = await showDialog(
-            context: context,
-            builder: (_) => const ImportConfigDialog(),
-          );
-
-          if (result == null) return;
-
-          final scanner = FolderScannerService(db);
-
-          final serviceConfig = ImportConfig(
-            selectedPath: result.folderPath,
-            allowedExtensions: [
-              if (result.scanPdf) '.pdf',
-              if (result.scanMp3) '.mp3',
-            ],
-          );
-
-          await scanner.scanAndImport(serviceConfig);
-        },
+        onPressed: () => _handleImportBook(context),
       ),
     );
   }
 
   Widget _emptyState(BuildContext context, String? shelf, bool isFav) {
     String message = "Rak buku Anda masih kosong";
-    
-    // Logic wrapped in blocks
     if (isFav) {
       message = "Belum ada buku Favorit";
     } else if (shelf != null) {
@@ -154,7 +213,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           if (!isFav && shelf == null) ...[
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => context.go('/import'),
+              onPressed: () => _handleImportBook(context),
               icon: const Icon(Icons.add),
               label: const Text('Tambah Buku'),
             ),
