@@ -28,7 +28,10 @@ class FavoritesScreen extends StatelessWidget {
                       : const Icon(Icons.book, size: 40),
                   title: Text(book.title),
                   onTap: () {
-                    context.go('/book/${Uri.encodeComponent(book.title)}');
+                    context.pushNamed(
+                      'book',
+                      pathParameters: {'id': book.id.toString()},
+                    );
                   },
                 );
               },

@@ -1,21 +1,18 @@
+// lib/screen/pdf_view_screen.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../drift/app_database.dart';
 import '../service/database_instance.dart';
 import '../service/ai/ai_activation.dart';
 import '../screen/reader.dart';
-
 import '../widget/music_player_widget.dart';
 import '../service/app_router.dart' as router;
 
-// 🔥 Syncfusion PDF Viewer
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-
 class PdfViewScreen extends StatefulWidget {
   final int bookId;
-
   const PdfViewScreen({required this.bookId, super.key});
 
   @override
@@ -24,55 +21,89 @@ class PdfViewScreen extends StatefulWidget {
 
 class _PdfViewScreenState extends State<PdfViewScreen> {
   Book? book;
-  late final ReadingSessionManager _reader;
-
+  late final ReadingStateManager _reader;
   late StreamSubscription<bool> _aiSub;
+  
   bool _aiActive = AiActivationService.instance.isActive;
   bool _showMusicWidget = false;
+  bool _isAiProcessing = false; // Track proses AI untuk UI feedback
 
-  // Syncfusion controller untuk navigasi halaman
   final PdfViewerController _pdfViewerController = PdfViewerController();
-
-  int _lastSavedPage = 0;
-  bool _isOpeningPdf = false;
   String? _pdfLoadError;
-
   Timer? _scrollDebounce;
 
   @override
   void initState() {
     super.initState();
-    _reader = ReadingSessionManager(router.musicService);
+    _reader = ReadingStateManager(router.musicService);
     _loadBook();
 
+    // Listener Aktivasi AI
     _aiSub = AiActivationService.instance.onActivationChanged.listen((active) {
       if (!mounted) return;
       setState(() => _aiActive = active);
-
-      if (active && book != null && book!.filePath.isNotEmpty) {
-        final currentPage = _pdfViewerController.pageNumber;
-        _reader.analyzeCurrentPages(book!.filePath, currentPage);
+      
+      if (active) {
+        _triggerAnalysis();
       }
     });
 
-      _reader.onThemeChanged.listen((theme) {
+    // Listener Theme Change dari AI
+    _reader.onThemeChanged.listen((theme) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row( // <-- tambahkan const di sini
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Expanded(child: Text("AI: Tema diterima! Memutar musik...")),
-            ],
-          ),
-          backgroundColor: Colors.green[700],
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      debugPrint("DEBUG UI: Tema '$theme' diterima.");
+      _showThemeSnackBar(theme);
     });
+  }
 
+  /// Wrapper aman untuk memicu analisis AI
+  Future<void> _triggerAnalysis() async {
+    // Guard: Jangan jalan jika sedang proses, PDF belum siap, atau AI mati
+    if (_isAiProcessing || _reader.isAnalyzing || book == null) return;
+    if (!AiActivationService.instance.isActive) return;
+
+    setState(() => _isAiProcessing = true);
+    
+    try {
+      final currentPage = _pdfViewerController.pageNumber;
+      if (currentPage > 0) {
+        debugPrint("🚀 [UI] Triggering AI Analysis for page $currentPage");
+        await _reader.analyzeCurrentPages(book!.filePath, currentPage);
+      }
+    } catch (e) {
+      debugPrint("❌ [UI] Analysis Error: $e");
+    } finally {
+      if (mounted) setState(() => _isAiProcessing = false);
+    }
+  }
+  
+  /// Initialize music with default playlist for manual controls
+  Future<void> _initializeMusicPlayback() async {
+    if (book == null) return;
+    try {
+      // Load default theme playlist to enable manual controls
+      await _reader.musicService.setPlaylistByTheme('default', startIndex: 0);
+      debugPrint("✅ [UI] Music playback initialized with default theme");
+    } catch (e) {
+      debugPrint("⚠️ [UI] Music initialization warning: $e");
+    }
+  }
+
+  void _showThemeSnackBar(String theme) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text("Mood: ${theme.toUpperCase()} - Menyesuaikan musik...")),
+          ],
+        ),
+        backgroundColor: Colors.blueGrey[900],
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -84,55 +115,61 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
     super.dispose();
   }
 
-  Future<void> _saveLastPage() async {
-    if (book == null) return;
-
-    try {
-      final page = _pdfViewerController.pageNumber;
-      if (page > 0 && page != _lastSavedPage) {
-        await db.updateLastPage(widget.bookId, page);
-        _lastSavedPage = page;
-      }
-    } catch (_) {}
+  void _saveLastPage() {
+    if (book != null) {
+      final currentPage = _pdfViewerController.pageNumber;
+      db.updateLastPage(widget.bookId, currentPage);
+    }
   }
 
   Future<void> _loadBook() async {
-    if (_isOpeningPdf) return;
-
-    final books = await db.getAllBooks();
-    final match = books.where((b) => b.id == widget.bookId);
-
-    if (match.isEmpty) {
-      setState(() => _pdfLoadError = 'Book not found');
-      return;
-    }
-
-    book = match.first;
-    final filePath = book!.filePath;
-
-    if (!File(filePath).existsSync()) {
-      setState(() => _pdfLoadError = 'PDF file not found: $filePath');
-      return;
-    }
-
-    _isOpeningPdf = true;
     try {
-      final initialPage = book!.lastPageRead;
-      _lastSavedPage = initialPage;
+      final loadedBook = await (db.select(db.books)
+            ..where((t) => t.id.equals(widget.bookId)))
+          .getSingleOrNull();
 
-      // Jump ke halaman awal setelah viewer selesai build
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (initialPage > 0) {
-          _pdfViewerController.jumpToPage(initialPage);
+      if (loadedBook == null) {
+        if (mounted) {
+          setState(() {
+            _pdfLoadError = 'Buku tidak ditemukan';
+          });
         }
-      });
+        return;
+      }
 
-      setState(() => _pdfLoadError = null);
+      final file = File(loadedBook.filePath);
+      if (!await file.exists()) {
+        if (mounted) {
+          setState(() {
+            _pdfLoadError = 'File PDF tidak ditemukan di:\n${loadedBook.filePath}';
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          book = loadedBook;
+        });
+
+        // Jump ke halaman terakhir dibaca
+        if (loadedBook.lastPageRead > 0) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _pdfViewerController.jumpToPage(loadedBook.lastPageRead);
+            }
+          });
+        }
+        
+        // Initialize music playback for manual controls
+        _initializeMusicPlayback();
+      }
     } catch (e) {
-      setState(() => _pdfLoadError = 'Failed to open PDF: $e');
-    } finally {
-      _isOpeningPdf = false;
+      if (mounted) {
+        setState(() {
+          _pdfLoadError = 'Error membuka buku: $e';
+        });
+      }
     }
   }
 
@@ -142,83 +179,50 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
       appBar: AppBar(
         title: Text(book?.title ?? 'PDF Viewer'),
         actions: [
+          // Tombol Music Toggle
           IconButton(
             icon: Icon(
               _showMusicWidget ? Icons.music_note : Icons.music_off,
               color: _showMusicWidget ? Colors.green : null,
             ),
-            onPressed: () {
-              setState(() => _showMusicWidget = !_showMusicWidget);
-            },
+            onPressed: () => setState(() => _showMusicWidget = !_showMusicWidget),
           ),
-          IconButton(
-            icon: Icon(
-              _aiActive ? Icons.memory : Icons.memory_outlined,
-              color: _aiActive ? Colors.amber : null,
-            ),
-            onPressed: () {
-              AiActivationService.instance.toggle();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    AiActivationService.instance.isActive
-                        ? 'AI Activated.'
-                        : 'AI Deactivated.',
+          
+          // Tombol AI Toggle (Responsive State)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: _isAiProcessing 
+              ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber)))
+              : IconButton(
+                  icon: Icon(
+                    _aiActive ? Icons.psychology : Icons.psychology_outlined,
+                    color: _aiActive ? Colors.amber : null,
                   ),
-                  duration: const Duration(seconds: 2),
+                  onPressed: () {
+                    AiActivationService.instance.toggle();
+                  },
                 ),
-              );
-            },
           ),
         ],
       ),
       body: Stack(
         children: [
           if (_pdfLoadError != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                    const SizedBox(height: 16),
-                    Text(
-                      _pdfLoadError!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            _buildErrorView()
           else if (book == null)
             const Center(child: CircularProgressIndicator())
           else
             SfPdfViewer.file(
               File(book!.filePath),
               controller: _pdfViewerController,
-              onDocumentLoaded: (details) {
-                final initial = book!.lastPageRead;
-                if (initial > 0) {
-                  _pdfViewerController.jumpToPage(initial);
-                }
-              },
-              onDocumentLoadFailed: (details) {
-                setState(() {
-                  _pdfLoadError = details.error.toString();
-                });
-              },
               onPageChanged: (details) {
-                // Debounce auto-save page
-                if (_scrollDebounce?.isActive ?? false) {
-                  _scrollDebounce!.cancel();
+                // 1. Auto-save page
+                _handlePageSave(details.newPageNumber);
+                
+                // 2. Auto-trigger AI jika aktif (Debounced)
+                if (_aiActive) {
+                  _triggerAnalysis();
                 }
-
-                _scrollDebounce = Timer(const Duration(seconds: 2), () {
-                  db.updateLastPage(widget.bookId, details.newPageNumber);
-                  debugPrint("💾 Auto-saved page ${details.newPageNumber}");
-                });
               },
             ),
 
@@ -234,6 +238,27 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  void _handlePageSave(int pageNum) {
+    _scrollDebounce?.cancel();
+    _scrollDebounce = Timer(const Duration(seconds: 2), () {
+      db.updateLastPage(widget.bookId, pageNum);
+      debugPrint("💾 Auto-saved page $pageNum");
+    });
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          const SizedBox(height: 16),
+          Text(_pdfLoadError!, textAlign: TextAlign.center),
         ],
       ),
     );

@@ -7,6 +7,7 @@ import '../screen/favorit.dart';
 import '../screen/playlist_screen.dart';
 import '../service/music_service.dart';
 import '../screen/book_detail.dart';
+import '../screen/import.dart';
 
 // note: reuse db instance and create musicService here or inject from app root
 final AppDatabase db = AppDatabase();
@@ -22,6 +23,7 @@ final GoRouter appRouter = GoRouter(
       routes: <RouteBase>[
         GoRoute(
           path: 'book/:id',
+          name: 'book',
           builder: (BuildContext context, GoRouterState state) {
             final id = int.tryParse(state.pathParameters['id'] ?? '');
             if (id == null) {
@@ -34,6 +36,7 @@ final GoRouter appRouter = GoRouter(
         ),
         GoRoute(
           path: 'edit-book/:id',
+          name: 'editBook',
           builder: (BuildContext context, GoRouterState state) {
             final id = int.tryParse(state.pathParameters['id'] ?? '');
             if (id == null) {
@@ -47,6 +50,12 @@ final GoRouter appRouter = GoRouter(
           path: 'favorit',
           builder: (BuildContext context, GoRouterState state) {
             return const FavoritesScreen();
+          },
+        ),
+        GoRoute(
+          path: 'import',
+          builder: (BuildContext context, GoRouterState state) {
+            return ImportScreen(db: db);
           },
         ),
         GoRoute(

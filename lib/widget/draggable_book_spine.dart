@@ -27,7 +27,7 @@ class DraggableBookSpine extends StatelessWidget {
         final hovering = cand.isNotEmpty;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
           child: LongPressDraggable<int>(
             data: index,
             feedback: Material(

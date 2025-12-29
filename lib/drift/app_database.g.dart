@@ -91,11 +91,6 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
   late final GeneratedColumn<String> series = GeneratedColumn<String>(
       'series', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
-  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
-  @override
-  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
-      'tags', aliasedName, true,
-      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -109,8 +104,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         displayOrder,
         author,
         description,
-        series,
-        tags
+        series
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -183,10 +177,6 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
       context.handle(_seriesMeta,
           series.isAcceptableOrUnknown(data['series']!, _seriesMeta));
     }
-    if (data.containsKey('tags')) {
-      context.handle(
-          _tagsMeta, tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta));
-    }
     return context;
   }
 
@@ -220,8 +210,6 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
           .read(DriftSqlType.string, data['${effectivePrefix}description']),
       series: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}series']),
-      tags: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}tags']),
     );
   }
 
@@ -244,7 +232,6 @@ class Book extends DataClass implements Insertable<Book> {
   final String? author;
   final String? description;
   final String? series;
-  final String? tags;
   const Book(
       {required this.id,
       required this.title,
@@ -257,8 +244,7 @@ class Book extends DataClass implements Insertable<Book> {
       required this.displayOrder,
       this.author,
       this.description,
-      this.series,
-      this.tags});
+      this.series});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -284,9 +270,6 @@ class Book extends DataClass implements Insertable<Book> {
     if (!nullToAbsent || series != null) {
       map['series'] = Variable<String>(series);
     }
-    if (!nullToAbsent || tags != null) {
-      map['tags'] = Variable<String>(tags);
-    }
     return map;
   }
 
@@ -311,7 +294,6 @@ class Book extends DataClass implements Insertable<Book> {
           : Value(description),
       series:
           series == null && nullToAbsent ? const Value.absent() : Value(series),
-      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
     );
   }
 
@@ -331,7 +313,6 @@ class Book extends DataClass implements Insertable<Book> {
       author: serializer.fromJson<String?>(json['author']),
       description: serializer.fromJson<String?>(json['description']),
       series: serializer.fromJson<String?>(json['series']),
-      tags: serializer.fromJson<String?>(json['tags']),
     );
   }
   @override
@@ -350,7 +331,6 @@ class Book extends DataClass implements Insertable<Book> {
       'author': serializer.toJson<String?>(author),
       'description': serializer.toJson<String?>(description),
       'series': serializer.toJson<String?>(series),
-      'tags': serializer.toJson<String?>(tags),
     };
   }
 
@@ -366,8 +346,7 @@ class Book extends DataClass implements Insertable<Book> {
           int? displayOrder,
           Value<String?> author = const Value.absent(),
           Value<String?> description = const Value.absent(),
-          Value<String?> series = const Value.absent(),
-          Value<String?> tags = const Value.absent()}) =>
+          Value<String?> series = const Value.absent()}) =>
       Book(
         id: id ?? this.id,
         title: title ?? this.title,
@@ -381,7 +360,6 @@ class Book extends DataClass implements Insertable<Book> {
         author: author.present ? author.value : this.author,
         description: description.present ? description.value : this.description,
         series: series.present ? series.value : this.series,
-        tags: tags.present ? tags.value : this.tags,
       );
   Book copyWithCompanion(BooksCompanion data) {
     return Book(
@@ -404,7 +382,6 @@ class Book extends DataClass implements Insertable<Book> {
       description:
           data.description.present ? data.description.value : this.description,
       series: data.series.present ? data.series.value : this.series,
-      tags: data.tags.present ? data.tags.value : this.tags,
     );
   }
 
@@ -422,8 +399,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('displayOrder: $displayOrder, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
-          ..write('series: $series, ')
-          ..write('tags: $tags')
+          ..write('series: $series')
           ..write(')'))
         .toString();
   }
@@ -441,8 +417,7 @@ class Book extends DataClass implements Insertable<Book> {
       displayOrder,
       author,
       description,
-      series,
-      tags);
+      series);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -458,8 +433,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.displayOrder == this.displayOrder &&
           other.author == this.author &&
           other.description == this.description &&
-          other.series == this.series &&
-          other.tags == this.tags);
+          other.series == this.series);
 }
 
 class BooksCompanion extends UpdateCompanion<Book> {
@@ -475,7 +449,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<String?> author;
   final Value<String?> description;
   final Value<String?> series;
-  final Value<String?> tags;
   const BooksCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -489,7 +462,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.author = const Value.absent(),
     this.description = const Value.absent(),
     this.series = const Value.absent(),
-    this.tags = const Value.absent(),
   });
   BooksCompanion.insert({
     this.id = const Value.absent(),
@@ -504,7 +476,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.author = const Value.absent(),
     this.description = const Value.absent(),
     this.series = const Value.absent(),
-    this.tags = const Value.absent(),
   })  : title = Value(title),
         filePath = Value(filePath);
   static Insertable<Book> custom({
@@ -520,7 +491,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<String>? author,
     Expression<String>? description,
     Expression<String>? series,
-    Expression<String>? tags,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -535,7 +505,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (author != null) 'author': author,
       if (description != null) 'description': description,
       if (series != null) 'series': series,
-      if (tags != null) 'tags': tags,
     });
   }
 
@@ -551,8 +520,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       Value<int>? displayOrder,
       Value<String?>? author,
       Value<String?>? description,
-      Value<String?>? series,
-      Value<String?>? tags}) {
+      Value<String?>? series}) {
     return BooksCompanion(
       id: id ?? this.id,
       title: title ?? this.title,
@@ -566,7 +534,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
       author: author ?? this.author,
       description: description ?? this.description,
       series: series ?? this.series,
-      tags: tags ?? this.tags,
     );
   }
 
@@ -609,9 +576,6 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (series.present) {
       map['series'] = Variable<String>(series.value);
     }
-    if (tags.present) {
-      map['tags'] = Variable<String>(tags.value);
-    }
     return map;
   }
 
@@ -629,8 +593,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('displayOrder: $displayOrder, ')
           ..write('author: $author, ')
           ..write('description: $description, ')
-          ..write('series: $series, ')
-          ..write('tags: $tags')
+          ..write('series: $series')
           ..write(')'))
         .toString();
   }
@@ -808,7 +771,10 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
   @override
   late final GeneratedColumn<String> themeName = GeneratedColumn<String>(
       'theme_name', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES themes (name) ON DELETE CASCADE'));
   static const VerificationMeta _titleMeta = const VerificationMeta('title');
   @override
   late final GeneratedColumn<String> title = GeneratedColumn<String>(
@@ -1470,6 +1436,377 @@ class BookCategoryMapCompanion extends UpdateCompanion<BookCategoryMapData> {
   }
 }
 
+class $ChapterEmotionMapsTable extends ChapterEmotionMaps
+    with TableInfo<$ChapterEmotionMapsTable, ChapterEmotionMap> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChapterEmotionMapsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _chapterIdMeta =
+      const VerificationMeta('chapterId');
+  @override
+  late final GeneratedColumn<String> chapterId = GeneratedColumn<String>(
+      'chapter_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<int> bookId = GeneratedColumn<int>(
+      'book_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES books (id) ON DELETE CASCADE'));
+  static const VerificationMeta _chapterIndexMeta =
+      const VerificationMeta('chapterIndex');
+  @override
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+      'chapter_index', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _emotionMapJsonMeta =
+      const VerificationMeta('emotionMapJson');
+  @override
+  late final GeneratedColumn<String> emotionMapJson = GeneratedColumn<String>(
+      'emotion_map_json', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _analyzedAtMeta =
+      const VerificationMeta('analyzedAt');
+  @override
+  late final GeneratedColumn<int> analyzedAt = GeneratedColumn<int>(
+      'analyzed_at', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _geminiModelMeta =
+      const VerificationMeta('geminiModel');
+  @override
+  late final GeneratedColumn<String> geminiModel = GeneratedColumn<String>(
+      'gemini_model', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('gemini-1.5-flash'));
+  @override
+  List<GeneratedColumn> get $columns => [
+        chapterId,
+        bookId,
+        chapterIndex,
+        emotionMapJson,
+        analyzedAt,
+        geminiModel
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'chapter_emotion_maps';
+  @override
+  VerificationContext validateIntegrity(Insertable<ChapterEmotionMap> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('chapter_id')) {
+      context.handle(_chapterIdMeta,
+          chapterId.isAcceptableOrUnknown(data['chapter_id']!, _chapterIdMeta));
+    } else if (isInserting) {
+      context.missing(_chapterIdMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(_bookIdMeta,
+          bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta));
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('chapter_index')) {
+      context.handle(
+          _chapterIndexMeta,
+          chapterIndex.isAcceptableOrUnknown(
+              data['chapter_index']!, _chapterIndexMeta));
+    } else if (isInserting) {
+      context.missing(_chapterIndexMeta);
+    }
+    if (data.containsKey('emotion_map_json')) {
+      context.handle(
+          _emotionMapJsonMeta,
+          emotionMapJson.isAcceptableOrUnknown(
+              data['emotion_map_json']!, _emotionMapJsonMeta));
+    } else if (isInserting) {
+      context.missing(_emotionMapJsonMeta);
+    }
+    if (data.containsKey('analyzed_at')) {
+      context.handle(
+          _analyzedAtMeta,
+          analyzedAt.isAcceptableOrUnknown(
+              data['analyzed_at']!, _analyzedAtMeta));
+    } else if (isInserting) {
+      context.missing(_analyzedAtMeta);
+    }
+    if (data.containsKey('gemini_model')) {
+      context.handle(
+          _geminiModelMeta,
+          geminiModel.isAcceptableOrUnknown(
+              data['gemini_model']!, _geminiModelMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {chapterId};
+  @override
+  ChapterEmotionMap map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChapterEmotionMap(
+      chapterId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}chapter_id'])!,
+      bookId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}book_id'])!,
+      chapterIndex: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}chapter_index'])!,
+      emotionMapJson: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}emotion_map_json'])!,
+      analyzedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}analyzed_at'])!,
+      geminiModel: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}gemini_model'])!,
+    );
+  }
+
+  @override
+  $ChapterEmotionMapsTable createAlias(String alias) {
+    return $ChapterEmotionMapsTable(attachedDatabase, alias);
+  }
+}
+
+class ChapterEmotionMap extends DataClass
+    implements Insertable<ChapterEmotionMap> {
+  final String chapterId;
+  final int bookId;
+  final int chapterIndex;
+  final String emotionMapJson;
+  final int analyzedAt;
+  final String geminiModel;
+  const ChapterEmotionMap(
+      {required this.chapterId,
+      required this.bookId,
+      required this.chapterIndex,
+      required this.emotionMapJson,
+      required this.analyzedAt,
+      required this.geminiModel});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['chapter_id'] = Variable<String>(chapterId);
+    map['book_id'] = Variable<int>(bookId);
+    map['chapter_index'] = Variable<int>(chapterIndex);
+    map['emotion_map_json'] = Variable<String>(emotionMapJson);
+    map['analyzed_at'] = Variable<int>(analyzedAt);
+    map['gemini_model'] = Variable<String>(geminiModel);
+    return map;
+  }
+
+  ChapterEmotionMapsCompanion toCompanion(bool nullToAbsent) {
+    return ChapterEmotionMapsCompanion(
+      chapterId: Value(chapterId),
+      bookId: Value(bookId),
+      chapterIndex: Value(chapterIndex),
+      emotionMapJson: Value(emotionMapJson),
+      analyzedAt: Value(analyzedAt),
+      geminiModel: Value(geminiModel),
+    );
+  }
+
+  factory ChapterEmotionMap.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChapterEmotionMap(
+      chapterId: serializer.fromJson<String>(json['chapterId']),
+      bookId: serializer.fromJson<int>(json['bookId']),
+      chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
+      emotionMapJson: serializer.fromJson<String>(json['emotionMapJson']),
+      analyzedAt: serializer.fromJson<int>(json['analyzedAt']),
+      geminiModel: serializer.fromJson<String>(json['geminiModel']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'chapterId': serializer.toJson<String>(chapterId),
+      'bookId': serializer.toJson<int>(bookId),
+      'chapterIndex': serializer.toJson<int>(chapterIndex),
+      'emotionMapJson': serializer.toJson<String>(emotionMapJson),
+      'analyzedAt': serializer.toJson<int>(analyzedAt),
+      'geminiModel': serializer.toJson<String>(geminiModel),
+    };
+  }
+
+  ChapterEmotionMap copyWith(
+          {String? chapterId,
+          int? bookId,
+          int? chapterIndex,
+          String? emotionMapJson,
+          int? analyzedAt,
+          String? geminiModel}) =>
+      ChapterEmotionMap(
+        chapterId: chapterId ?? this.chapterId,
+        bookId: bookId ?? this.bookId,
+        chapterIndex: chapterIndex ?? this.chapterIndex,
+        emotionMapJson: emotionMapJson ?? this.emotionMapJson,
+        analyzedAt: analyzedAt ?? this.analyzedAt,
+        geminiModel: geminiModel ?? this.geminiModel,
+      );
+  ChapterEmotionMap copyWithCompanion(ChapterEmotionMapsCompanion data) {
+    return ChapterEmotionMap(
+      chapterId: data.chapterId.present ? data.chapterId.value : this.chapterId,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      chapterIndex: data.chapterIndex.present
+          ? data.chapterIndex.value
+          : this.chapterIndex,
+      emotionMapJson: data.emotionMapJson.present
+          ? data.emotionMapJson.value
+          : this.emotionMapJson,
+      analyzedAt:
+          data.analyzedAt.present ? data.analyzedAt.value : this.analyzedAt,
+      geminiModel:
+          data.geminiModel.present ? data.geminiModel.value : this.geminiModel,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChapterEmotionMap(')
+          ..write('chapterId: $chapterId, ')
+          ..write('bookId: $bookId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('emotionMapJson: $emotionMapJson, ')
+          ..write('analyzedAt: $analyzedAt, ')
+          ..write('geminiModel: $geminiModel')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      chapterId, bookId, chapterIndex, emotionMapJson, analyzedAt, geminiModel);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChapterEmotionMap &&
+          other.chapterId == this.chapterId &&
+          other.bookId == this.bookId &&
+          other.chapterIndex == this.chapterIndex &&
+          other.emotionMapJson == this.emotionMapJson &&
+          other.analyzedAt == this.analyzedAt &&
+          other.geminiModel == this.geminiModel);
+}
+
+class ChapterEmotionMapsCompanion extends UpdateCompanion<ChapterEmotionMap> {
+  final Value<String> chapterId;
+  final Value<int> bookId;
+  final Value<int> chapterIndex;
+  final Value<String> emotionMapJson;
+  final Value<int> analyzedAt;
+  final Value<String> geminiModel;
+  final Value<int> rowid;
+  const ChapterEmotionMapsCompanion({
+    this.chapterId = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.emotionMapJson = const Value.absent(),
+    this.analyzedAt = const Value.absent(),
+    this.geminiModel = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ChapterEmotionMapsCompanion.insert({
+    required String chapterId,
+    required int bookId,
+    required int chapterIndex,
+    required String emotionMapJson,
+    required int analyzedAt,
+    this.geminiModel = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : chapterId = Value(chapterId),
+        bookId = Value(bookId),
+        chapterIndex = Value(chapterIndex),
+        emotionMapJson = Value(emotionMapJson),
+        analyzedAt = Value(analyzedAt);
+  static Insertable<ChapterEmotionMap> custom({
+    Expression<String>? chapterId,
+    Expression<int>? bookId,
+    Expression<int>? chapterIndex,
+    Expression<String>? emotionMapJson,
+    Expression<int>? analyzedAt,
+    Expression<String>? geminiModel,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (chapterId != null) 'chapter_id': chapterId,
+      if (bookId != null) 'book_id': bookId,
+      if (chapterIndex != null) 'chapter_index': chapterIndex,
+      if (emotionMapJson != null) 'emotion_map_json': emotionMapJson,
+      if (analyzedAt != null) 'analyzed_at': analyzedAt,
+      if (geminiModel != null) 'gemini_model': geminiModel,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ChapterEmotionMapsCompanion copyWith(
+      {Value<String>? chapterId,
+      Value<int>? bookId,
+      Value<int>? chapterIndex,
+      Value<String>? emotionMapJson,
+      Value<int>? analyzedAt,
+      Value<String>? geminiModel,
+      Value<int>? rowid}) {
+    return ChapterEmotionMapsCompanion(
+      chapterId: chapterId ?? this.chapterId,
+      bookId: bookId ?? this.bookId,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      emotionMapJson: emotionMapJson ?? this.emotionMapJson,
+      analyzedAt: analyzedAt ?? this.analyzedAt,
+      geminiModel: geminiModel ?? this.geminiModel,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (chapterId.present) {
+      map['chapter_id'] = Variable<String>(chapterId.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<int>(bookId.value);
+    }
+    if (chapterIndex.present) {
+      map['chapter_index'] = Variable<int>(chapterIndex.value);
+    }
+    if (emotionMapJson.present) {
+      map['emotion_map_json'] = Variable<String>(emotionMapJson.value);
+    }
+    if (analyzedAt.present) {
+      map['analyzed_at'] = Variable<int>(analyzedAt.value);
+    }
+    if (geminiModel.present) {
+      map['gemini_model'] = Variable<String>(geminiModel.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChapterEmotionMapsCompanion(')
+          ..write('chapterId: $chapterId, ')
+          ..write('bookId: $bookId, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('emotionMapJson: $emotionMapJson, ')
+          ..write('analyzedAt: $analyzedAt, ')
+          ..write('geminiModel: $geminiModel, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1479,15 +1816,24 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $BookCategoryMapTable bookCategoryMap =
       $BookCategoryMapTable(this);
+  late final $ChapterEmotionMapsTable chapterEmotionMaps =
+      $ChapterEmotionMapsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [books, themes, songs, categories, bookCategoryMap];
+      [books, themes, songs, categories, bookCategoryMap, chapterEmotionMaps];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules(
         [
+          WritePropagation(
+            on: TableUpdateQuery.onTableName('themes',
+                limitUpdateKind: UpdateKind.delete),
+            result: [
+              TableUpdate('songs', kind: UpdateKind.delete),
+            ],
+          ),
           WritePropagation(
             on: TableUpdateQuery.onTableName('books',
                 limitUpdateKind: UpdateKind.delete),
@@ -1500,6 +1846,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
                 limitUpdateKind: UpdateKind.delete),
             result: [
               TableUpdate('book_category_map', kind: UpdateKind.delete),
+            ],
+          ),
+          WritePropagation(
+            on: TableUpdateQuery.onTableName('books',
+                limitUpdateKind: UpdateKind.delete),
+            result: [
+              TableUpdate('chapter_emotion_maps', kind: UpdateKind.delete),
             ],
           ),
         ],
@@ -1519,7 +1872,6 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<String?> author,
   Value<String?> description,
   Value<String?> series,
-  Value<String?> tags,
 });
 typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<int> id,
@@ -1534,7 +1886,6 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<String?> author,
   Value<String?> description,
   Value<String?> series,
-  Value<String?> tags,
 });
 
 final class $$BooksTableReferences
@@ -1554,6 +1905,23 @@ final class $$BooksTableReferences
 
     final cache =
         $_typedResult.readTableOrNull(_bookCategoryMapRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
+  static MultiTypedResultKey<$ChapterEmotionMapsTable, List<ChapterEmotionMap>>
+      _chapterEmotionMapsRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.chapterEmotionMaps,
+              aliasName: $_aliasNameGenerator(
+                  db.books.id, db.chapterEmotionMaps.bookId));
+
+  $$ChapterEmotionMapsTableProcessedTableManager get chapterEmotionMapsRefs {
+    final manager =
+        $$ChapterEmotionMapsTableTableManager($_db, $_db.chapterEmotionMaps)
+            .filter((f) => f.bookId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache =
+        $_typedResult.readTableOrNull(_chapterEmotionMapsRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -1603,9 +1971,6 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
   ColumnFilters<String> get series => $composableBuilder(
       column: $table.series, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get tags => $composableBuilder(
-      column: $table.tags, builder: (column) => ColumnFilters(column));
-
   Expression<bool> bookCategoryMapRefs(
       Expression<bool> Function($$BookCategoryMapTableFilterComposer f) f) {
     final $$BookCategoryMapTableFilterComposer composer = $composerBuilder(
@@ -1619,6 +1984,27 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
             $$BookCategoryMapTableFilterComposer(
               $db: $db,
               $table: $db.bookCategoryMap,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> chapterEmotionMapsRefs(
+      Expression<bool> Function($$ChapterEmotionMapsTableFilterComposer f) f) {
+    final $$ChapterEmotionMapsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.chapterEmotionMaps,
+        getReferencedColumn: (t) => t.bookId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ChapterEmotionMapsTableFilterComposer(
+              $db: $db,
+              $table: $db.chapterEmotionMaps,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -1674,9 +2060,6 @@ class $$BooksTableOrderingComposer
 
   ColumnOrderings<String> get series => $composableBuilder(
       column: $table.series, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get tags => $composableBuilder(
-      column: $table.tags, builder: (column) => ColumnOrderings(column));
 }
 
 class $$BooksTableAnnotationComposer
@@ -1724,9 +2107,6 @@ class $$BooksTableAnnotationComposer
   GeneratedColumn<String> get series =>
       $composableBuilder(column: $table.series, builder: (column) => column);
 
-  GeneratedColumn<String> get tags =>
-      $composableBuilder(column: $table.tags, builder: (column) => column);
-
   Expression<T> bookCategoryMapRefs<T extends Object>(
       Expression<T> Function($$BookCategoryMapTableAnnotationComposer a) f) {
     final $$BookCategoryMapTableAnnotationComposer composer = $composerBuilder(
@@ -1747,6 +2127,28 @@ class $$BooksTableAnnotationComposer
             ));
     return f(composer);
   }
+
+  Expression<T> chapterEmotionMapsRefs<T extends Object>(
+      Expression<T> Function($$ChapterEmotionMapsTableAnnotationComposer a) f) {
+    final $$ChapterEmotionMapsTableAnnotationComposer composer =
+        $composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.id,
+            referencedTable: $db.chapterEmotionMaps,
+            getReferencedColumn: (t) => t.bookId,
+            builder: (joinBuilder,
+                    {$addJoinBuilderToRootComposer,
+                    $removeJoinBuilderFromRootComposer}) =>
+                $$ChapterEmotionMapsTableAnnotationComposer(
+                  $db: $db,
+                  $table: $db.chapterEmotionMaps,
+                  $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                  joinBuilder: joinBuilder,
+                  $removeJoinBuilderFromRootComposer:
+                      $removeJoinBuilderFromRootComposer,
+                ));
+    return f(composer);
+  }
 }
 
 class $$BooksTableTableManager extends RootTableManager<
@@ -1760,7 +2162,8 @@ class $$BooksTableTableManager extends RootTableManager<
     $$BooksTableUpdateCompanionBuilder,
     (Book, $$BooksTableReferences),
     Book,
-    PrefetchHooks Function({bool bookCategoryMapRefs})> {
+    PrefetchHooks Function(
+        {bool bookCategoryMapRefs, bool chapterEmotionMapsRefs})> {
   $$BooksTableTableManager(_$AppDatabase db, $BooksTable table)
       : super(TableManagerState(
           db: db,
@@ -1784,7 +2187,6 @@ class $$BooksTableTableManager extends RootTableManager<
             Value<String?> author = const Value.absent(),
             Value<String?> description = const Value.absent(),
             Value<String?> series = const Value.absent(),
-            Value<String?> tags = const Value.absent(),
           }) =>
               BooksCompanion(
             id: id,
@@ -1799,7 +2201,6 @@ class $$BooksTableTableManager extends RootTableManager<
             author: author,
             description: description,
             series: series,
-            tags: tags,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -1814,7 +2215,6 @@ class $$BooksTableTableManager extends RootTableManager<
             Value<String?> author = const Value.absent(),
             Value<String?> description = const Value.absent(),
             Value<String?> series = const Value.absent(),
-            Value<String?> tags = const Value.absent(),
           }) =>
               BooksCompanion.insert(
             id: id,
@@ -1829,17 +2229,18 @@ class $$BooksTableTableManager extends RootTableManager<
             author: author,
             description: description,
             series: series,
-            tags: tags,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) =>
                   (e.readTable(table), $$BooksTableReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: ({bookCategoryMapRefs = false}) {
+          prefetchHooksCallback: (
+              {bookCategoryMapRefs = false, chapterEmotionMapsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
-                if (bookCategoryMapRefs) db.bookCategoryMap
+                if (bookCategoryMapRefs) db.bookCategoryMap,
+                if (chapterEmotionMapsRefs) db.chapterEmotionMaps
               ],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
@@ -1853,6 +2254,19 @@ class $$BooksTableTableManager extends RootTableManager<
                         managerFromTypedResult: (p0) =>
                             $$BooksTableReferences(db, table, p0)
                                 .bookCategoryMapRefs,
+                        referencedItemsForCurrentItem: (item,
+                                referencedItems) =>
+                            referencedItems.where((e) => e.bookId == item.id),
+                        typedResults: items),
+                  if (chapterEmotionMapsRefs)
+                    await $_getPrefetchedData<Book, $BooksTable,
+                            ChapterEmotionMap>(
+                        currentTable: table,
+                        referencedTable: $$BooksTableReferences
+                            ._chapterEmotionMapsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$BooksTableReferences(db, table, p0)
+                                .chapterEmotionMapsRefs,
                         referencedItemsForCurrentItem: (item,
                                 referencedItems) =>
                             referencedItems.where((e) => e.bookId == item.id),
@@ -1875,7 +2289,8 @@ typedef $$BooksTableProcessedTableManager = ProcessedTableManager<
     $$BooksTableUpdateCompanionBuilder,
     (Book, $$BooksTableReferences),
     Book,
-    PrefetchHooks Function({bool bookCategoryMapRefs})>;
+    PrefetchHooks Function(
+        {bool bookCategoryMapRefs, bool chapterEmotionMapsRefs})>;
 typedef $$ThemesTableCreateCompanionBuilder = ThemesCompanion Function({
   required String name,
   Value<int> rowid,
@@ -1884,6 +2299,25 @@ typedef $$ThemesTableUpdateCompanionBuilder = ThemesCompanion Function({
   Value<String> name,
   Value<int> rowid,
 });
+
+final class $$ThemesTableReferences
+    extends BaseReferences<_$AppDatabase, $ThemesTable, Theme> {
+  $$ThemesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$SongsTable, List<Song>> _songsRefsTable(
+          _$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(db.songs,
+          aliasName: $_aliasNameGenerator(db.themes.name, db.songs.themeName));
+
+  $$SongsTableProcessedTableManager get songsRefs {
+    final manager = $$SongsTableTableManager($_db, $_db.songs).filter(
+        (f) => f.themeName.name.sqlEquals($_itemColumn<String>('name')!));
+
+    final cache = $_typedResult.readTableOrNull(_songsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+}
 
 class $$ThemesTableFilterComposer
     extends Composer<_$AppDatabase, $ThemesTable> {
@@ -1896,6 +2330,27 @@ class $$ThemesTableFilterComposer
   });
   ColumnFilters<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnFilters(column));
+
+  Expression<bool> songsRefs(
+      Expression<bool> Function($$SongsTableFilterComposer f) f) {
+    final $$SongsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.name,
+        referencedTable: $db.songs,
+        getReferencedColumn: (t) => t.themeName,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$SongsTableFilterComposer(
+              $db: $db,
+              $table: $db.songs,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$ThemesTableOrderingComposer
@@ -1922,6 +2377,27 @@ class $$ThemesTableAnnotationComposer
   });
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  Expression<T> songsRefs<T extends Object>(
+      Expression<T> Function($$SongsTableAnnotationComposer a) f) {
+    final $$SongsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.name,
+        referencedTable: $db.songs,
+        getReferencedColumn: (t) => t.themeName,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$SongsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.songs,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$ThemesTableTableManager extends RootTableManager<
@@ -1933,9 +2409,9 @@ class $$ThemesTableTableManager extends RootTableManager<
     $$ThemesTableAnnotationComposer,
     $$ThemesTableCreateCompanionBuilder,
     $$ThemesTableUpdateCompanionBuilder,
-    (Theme, BaseReferences<_$AppDatabase, $ThemesTable, Theme>),
+    (Theme, $$ThemesTableReferences),
     Theme,
-    PrefetchHooks Function()> {
+    PrefetchHooks Function({bool songsRefs})> {
   $$ThemesTableTableManager(_$AppDatabase db, $ThemesTable table)
       : super(TableManagerState(
           db: db,
@@ -1963,9 +2439,31 @@ class $$ThemesTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) =>
+                  (e.readTable(table), $$ThemesTableReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({songsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (songsRefs) db.songs],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (songsRefs)
+                    await $_getPrefetchedData<Theme, $ThemesTable, Song>(
+                        currentTable: table,
+                        referencedTable:
+                            $$ThemesTableReferences._songsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$ThemesTableReferences(db, table, p0).songsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.themeName == item.name),
+                        typedResults: items)
+                ];
+              },
+            );
+          },
         ));
 }
 
@@ -1978,9 +2476,9 @@ typedef $$ThemesTableProcessedTableManager = ProcessedTableManager<
     $$ThemesTableAnnotationComposer,
     $$ThemesTableCreateCompanionBuilder,
     $$ThemesTableUpdateCompanionBuilder,
-    (Theme, BaseReferences<_$AppDatabase, $ThemesTable, Theme>),
+    (Theme, $$ThemesTableReferences),
     Theme,
-    PrefetchHooks Function()>;
+    PrefetchHooks Function({bool songsRefs})>;
 typedef $$SongsTableCreateCompanionBuilder = SongsCompanion Function({
   Value<int> id,
   required String themeName,
@@ -1996,6 +2494,25 @@ typedef $$SongsTableUpdateCompanionBuilder = SongsCompanion Function({
   Value<int> orderIndex,
 });
 
+final class $$SongsTableReferences
+    extends BaseReferences<_$AppDatabase, $SongsTable, Song> {
+  $$SongsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $ThemesTable _themeNameTable(_$AppDatabase db) => db.themes
+      .createAlias($_aliasNameGenerator(db.songs.themeName, db.themes.name));
+
+  $$ThemesTableProcessedTableManager get themeName {
+    final $_column = $_itemColumn<String>('theme_name')!;
+
+    final manager = $$ThemesTableTableManager($_db, $_db.themes)
+        .filter((f) => f.name.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_themeNameTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
 class $$SongsTableFilterComposer extends Composer<_$AppDatabase, $SongsTable> {
   $$SongsTableFilterComposer({
     required super.$db,
@@ -2007,9 +2524,6 @@ class $$SongsTableFilterComposer extends Composer<_$AppDatabase, $SongsTable> {
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get themeName => $composableBuilder(
-      column: $table.themeName, builder: (column) => ColumnFilters(column));
-
   ColumnFilters<String> get title => $composableBuilder(
       column: $table.title, builder: (column) => ColumnFilters(column));
 
@@ -2018,6 +2532,26 @@ class $$SongsTableFilterComposer extends Composer<_$AppDatabase, $SongsTable> {
 
   ColumnFilters<int> get orderIndex => $composableBuilder(
       column: $table.orderIndex, builder: (column) => ColumnFilters(column));
+
+  $$ThemesTableFilterComposer get themeName {
+    final $$ThemesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.themeName,
+        referencedTable: $db.themes,
+        getReferencedColumn: (t) => t.name,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ThemesTableFilterComposer(
+              $db: $db,
+              $table: $db.themes,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$SongsTableOrderingComposer
@@ -2032,9 +2566,6 @@ class $$SongsTableOrderingComposer
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get themeName => $composableBuilder(
-      column: $table.themeName, builder: (column) => ColumnOrderings(column));
-
   ColumnOrderings<String> get title => $composableBuilder(
       column: $table.title, builder: (column) => ColumnOrderings(column));
 
@@ -2043,6 +2574,26 @@ class $$SongsTableOrderingComposer
 
   ColumnOrderings<int> get orderIndex => $composableBuilder(
       column: $table.orderIndex, builder: (column) => ColumnOrderings(column));
+
+  $$ThemesTableOrderingComposer get themeName {
+    final $$ThemesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.themeName,
+        referencedTable: $db.themes,
+        getReferencedColumn: (t) => t.name,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ThemesTableOrderingComposer(
+              $db: $db,
+              $table: $db.themes,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$SongsTableAnnotationComposer
@@ -2057,9 +2608,6 @@ class $$SongsTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get themeName =>
-      $composableBuilder(column: $table.themeName, builder: (column) => column);
-
   GeneratedColumn<String> get title =>
       $composableBuilder(column: $table.title, builder: (column) => column);
 
@@ -2068,6 +2616,26 @@ class $$SongsTableAnnotationComposer
 
   GeneratedColumn<int> get orderIndex => $composableBuilder(
       column: $table.orderIndex, builder: (column) => column);
+
+  $$ThemesTableAnnotationComposer get themeName {
+    final $$ThemesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.themeName,
+        referencedTable: $db.themes,
+        getReferencedColumn: (t) => t.name,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ThemesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.themes,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$SongsTableTableManager extends RootTableManager<
@@ -2079,9 +2647,9 @@ class $$SongsTableTableManager extends RootTableManager<
     $$SongsTableAnnotationComposer,
     $$SongsTableCreateCompanionBuilder,
     $$SongsTableUpdateCompanionBuilder,
-    (Song, BaseReferences<_$AppDatabase, $SongsTable, Song>),
+    (Song, $$SongsTableReferences),
     Song,
-    PrefetchHooks Function()> {
+    PrefetchHooks Function({bool themeName})> {
   $$SongsTableTableManager(_$AppDatabase db, $SongsTable table)
       : super(TableManagerState(
           db: db,
@@ -2121,9 +2689,43 @@ class $$SongsTableTableManager extends RootTableManager<
             orderIndex: orderIndex,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) =>
+                  (e.readTable(table), $$SongsTableReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({themeName = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (themeName) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.themeName,
+                    referencedTable: $$SongsTableReferences._themeNameTable(db),
+                    referencedColumn:
+                        $$SongsTableReferences._themeNameTable(db).name,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ));
 }
 
@@ -2136,9 +2738,9 @@ typedef $$SongsTableProcessedTableManager = ProcessedTableManager<
     $$SongsTableAnnotationComposer,
     $$SongsTableCreateCompanionBuilder,
     $$SongsTableUpdateCompanionBuilder,
-    (Song, BaseReferences<_$AppDatabase, $SongsTable, Song>),
+    (Song, $$SongsTableReferences),
     Song,
-    PrefetchHooks Function()>;
+    PrefetchHooks Function({bool themeName})>;
 typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
   Value<int> id,
   required String name,
@@ -2653,6 +3255,301 @@ typedef $$BookCategoryMapTableProcessedTableManager = ProcessedTableManager<
     (BookCategoryMapData, $$BookCategoryMapTableReferences),
     BookCategoryMapData,
     PrefetchHooks Function({bool bookId, bool categoryId})>;
+typedef $$ChapterEmotionMapsTableCreateCompanionBuilder
+    = ChapterEmotionMapsCompanion Function({
+  required String chapterId,
+  required int bookId,
+  required int chapterIndex,
+  required String emotionMapJson,
+  required int analyzedAt,
+  Value<String> geminiModel,
+  Value<int> rowid,
+});
+typedef $$ChapterEmotionMapsTableUpdateCompanionBuilder
+    = ChapterEmotionMapsCompanion Function({
+  Value<String> chapterId,
+  Value<int> bookId,
+  Value<int> chapterIndex,
+  Value<String> emotionMapJson,
+  Value<int> analyzedAt,
+  Value<String> geminiModel,
+  Value<int> rowid,
+});
+
+final class $$ChapterEmotionMapsTableReferences extends BaseReferences<
+    _$AppDatabase, $ChapterEmotionMapsTable, ChapterEmotionMap> {
+  $$ChapterEmotionMapsTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static $BooksTable _bookIdTable(_$AppDatabase db) => db.books.createAlias(
+      $_aliasNameGenerator(db.chapterEmotionMaps.bookId, db.books.id));
+
+  $$BooksTableProcessedTableManager get bookId {
+    final $_column = $_itemColumn<int>('book_id')!;
+
+    final manager = $$BooksTableTableManager($_db, $_db.books)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bookIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$ChapterEmotionMapsTableFilterComposer
+    extends Composer<_$AppDatabase, $ChapterEmotionMapsTable> {
+  $$ChapterEmotionMapsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get chapterId => $composableBuilder(
+      column: $table.chapterId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+      column: $table.chapterIndex, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get emotionMapJson => $composableBuilder(
+      column: $table.emotionMapJson,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get analyzedAt => $composableBuilder(
+      column: $table.analyzedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get geminiModel => $composableBuilder(
+      column: $table.geminiModel, builder: (column) => ColumnFilters(column));
+
+  $$BooksTableFilterComposer get bookId {
+    final $$BooksTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.bookId,
+        referencedTable: $db.books,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BooksTableFilterComposer(
+              $db: $db,
+              $table: $db.books,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$ChapterEmotionMapsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ChapterEmotionMapsTable> {
+  $$ChapterEmotionMapsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get chapterId => $composableBuilder(
+      column: $table.chapterId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+      column: $table.chapterIndex,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get emotionMapJson => $composableBuilder(
+      column: $table.emotionMapJson,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get analyzedAt => $composableBuilder(
+      column: $table.analyzedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get geminiModel => $composableBuilder(
+      column: $table.geminiModel, builder: (column) => ColumnOrderings(column));
+
+  $$BooksTableOrderingComposer get bookId {
+    final $$BooksTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.bookId,
+        referencedTable: $db.books,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BooksTableOrderingComposer(
+              $db: $db,
+              $table: $db.books,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$ChapterEmotionMapsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ChapterEmotionMapsTable> {
+  $$ChapterEmotionMapsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get chapterId =>
+      $composableBuilder(column: $table.chapterId, builder: (column) => column);
+
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+      column: $table.chapterIndex, builder: (column) => column);
+
+  GeneratedColumn<String> get emotionMapJson => $composableBuilder(
+      column: $table.emotionMapJson, builder: (column) => column);
+
+  GeneratedColumn<int> get analyzedAt => $composableBuilder(
+      column: $table.analyzedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get geminiModel => $composableBuilder(
+      column: $table.geminiModel, builder: (column) => column);
+
+  $$BooksTableAnnotationComposer get bookId {
+    final $$BooksTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.bookId,
+        referencedTable: $db.books,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BooksTableAnnotationComposer(
+              $db: $db,
+              $table: $db.books,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$ChapterEmotionMapsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ChapterEmotionMapsTable,
+    ChapterEmotionMap,
+    $$ChapterEmotionMapsTableFilterComposer,
+    $$ChapterEmotionMapsTableOrderingComposer,
+    $$ChapterEmotionMapsTableAnnotationComposer,
+    $$ChapterEmotionMapsTableCreateCompanionBuilder,
+    $$ChapterEmotionMapsTableUpdateCompanionBuilder,
+    (ChapterEmotionMap, $$ChapterEmotionMapsTableReferences),
+    ChapterEmotionMap,
+    PrefetchHooks Function({bool bookId})> {
+  $$ChapterEmotionMapsTableTableManager(
+      _$AppDatabase db, $ChapterEmotionMapsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ChapterEmotionMapsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ChapterEmotionMapsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ChapterEmotionMapsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> chapterId = const Value.absent(),
+            Value<int> bookId = const Value.absent(),
+            Value<int> chapterIndex = const Value.absent(),
+            Value<String> emotionMapJson = const Value.absent(),
+            Value<int> analyzedAt = const Value.absent(),
+            Value<String> geminiModel = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ChapterEmotionMapsCompanion(
+            chapterId: chapterId,
+            bookId: bookId,
+            chapterIndex: chapterIndex,
+            emotionMapJson: emotionMapJson,
+            analyzedAt: analyzedAt,
+            geminiModel: geminiModel,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String chapterId,
+            required int bookId,
+            required int chapterIndex,
+            required String emotionMapJson,
+            required int analyzedAt,
+            Value<String> geminiModel = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ChapterEmotionMapsCompanion.insert(
+            chapterId: chapterId,
+            bookId: bookId,
+            chapterIndex: chapterIndex,
+            emotionMapJson: emotionMapJson,
+            analyzedAt: analyzedAt,
+            geminiModel: geminiModel,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$ChapterEmotionMapsTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: ({bookId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (bookId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.bookId,
+                    referencedTable:
+                        $$ChapterEmotionMapsTableReferences._bookIdTable(db),
+                    referencedColumn:
+                        $$ChapterEmotionMapsTableReferences._bookIdTable(db).id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$ChapterEmotionMapsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ChapterEmotionMapsTable,
+    ChapterEmotionMap,
+    $$ChapterEmotionMapsTableFilterComposer,
+    $$ChapterEmotionMapsTableOrderingComposer,
+    $$ChapterEmotionMapsTableAnnotationComposer,
+    $$ChapterEmotionMapsTableCreateCompanionBuilder,
+    $$ChapterEmotionMapsTableUpdateCompanionBuilder,
+    (ChapterEmotionMap, $$ChapterEmotionMapsTableReferences),
+    ChapterEmotionMap,
+    PrefetchHooks Function({bool bookId})>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2667,4 +3564,6 @@ class $AppDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$BookCategoryMapTableTableManager get bookCategoryMap =>
       $$BookCategoryMapTableTableManager(_db, _db.bookCategoryMap);
+  $$ChapterEmotionMapsTableTableManager get chapterEmotionMaps =>
+      $$ChapterEmotionMapsTableTableManager(_db, _db.chapterEmotionMaps);
 }

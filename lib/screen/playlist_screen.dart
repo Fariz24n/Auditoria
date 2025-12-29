@@ -20,7 +20,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         title: const Text('Music Library'),
       ),
       body: FutureBuilder<List<Theme>>(
-        future: widget.db.getAllThemes(),
+        future: widget.db.select(widget.db.themes).get(),
         builder: (c, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
           final themes = snap.data!;
@@ -31,7 +31,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 title: Text(theme.name),
                 children: [
                   FutureBuilder<List<Song>>(
-                    future: widget.db.getSongsByThemeId(theme.name),
+                    future: widget.db.getSongsByTheme(theme.name),
                     builder: (c2, snap2) {
                       if (!snap2.hasData) return const SizedBox();
                       final songs = snap2.data!;

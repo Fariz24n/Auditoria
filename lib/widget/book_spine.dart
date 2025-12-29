@@ -31,7 +31,11 @@ class _BookSpineState extends State<BookSpine> {
         : '';
 
     return GestureDetector(
-      onTap: () => context.go('/book/${widget.book.id}'),
+      behavior: HitTestBehavior.deferToChild, // let child widgets (popup menu) handle taps first
+      onTap: () => context.pushNamed(
+        'book',
+        pathParameters: {'id': widget.book.id.toString()},
+      ),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
@@ -89,6 +93,36 @@ class _BookSpineState extends State<BookSpine> {
                       ),
                     ),
                   ),
+                  
+                  //Untuk layar Cover
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: PopupMenuButton(
+                      icon: const Icon(Icons.more_vert, size: 20),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Text('Edit Buku'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Hapus Buku'),
+                        ),
+                      ],
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          context.pushNamed(
+                            'editBook',
+                            pathParameters: {'id': widget.book.id.toString()},
+                          );
+                        }
+                        if (value == 'delete') {
+                          // nanti kita isi kalau kamu mau
+                        }
+                      },
+                    ),
+                  ),
 
                   /// TITLE + MENU + THEME
                   Positioned(
@@ -126,26 +160,7 @@ class _BookSpineState extends State<BookSpine> {
                             ),
                           ),
 
-                          /// POPUP MENU (FIXED)
-                          PopupMenuButton<String>(
-                            icon: const Icon(
-                              Icons.more_vert,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            onSelected: (String value) {
-                              if (value == 'edit') {
-                                context.go('/edit-book/${widget.book.id}');
-                              }
-                            },
-                            itemBuilder: (BuildContext context)
-                                => <PopupMenuEntry<String>>[
-                              const PopupMenuItem<String>(
-                                value: 'edit',
-                                child: Text('Edit Buku'),
-                              ),
-                            ],
-                          ),
+                          // single menu kept at bottom-right; removed duplicate here
 
                           /// THEME / SHELF
                           if (widget.book.theme != null &&

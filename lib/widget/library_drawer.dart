@@ -14,8 +14,8 @@ class LibraryDrawer extends StatelessWidget {
       child: Column(
         children: [
           // 1. Header (Gambar Bulan/Malam seperti referensi)
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(
+          const UserAccountsDrawerHeader(
+            decoration: BoxDecoration(
               color: Color(0xFF1E1E2C), // Dark blue/grey
               image: DecorationImage(
                 image: AssetImage('assets/moon_bg.png'), // Ganti dengan aset Anda jika ada
@@ -23,9 +23,9 @@ class LibraryDrawer extends StatelessWidget {
                 opacity: 0.4,
               ),
             ),
-            accountName: const Text("Auditoria Reader", style: TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: const Text("Selamat membaca malam ini."),
-            currentAccountPicture: const CircleAvatar(
+            accountName: Text("Auditoria Reader", style: TextStyle(fontWeight: FontWeight.bold)),
+            accountEmail: Text("Selamat membaca malam ini."),
+            currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.amber,
               child: Icon(Icons.nightlight_round, color: Colors.black87),
             ),
@@ -41,27 +41,24 @@ class LibraryDrawer extends StatelessWidget {
                 const Divider(),
 
                 // 3. "My Shelf" - Expandable Menu
-                // Kita perlu mengambil daftar kategori unik dari Database
                 StreamBuilder<List<String>>(
-                  stream: db.watchUniqueThemes(), // Kita akan buat fungsi ini di database nanti
+                  stream: db.watchUniqueThemes(),
                   builder: (context, snapshot) {
                     final shelves = snapshot.data ?? [];
                     
                     return ExpansionTile(
-                      leading: const Icon(Icons.shelves), // Icon Rak Buku
+                      leading: const Icon(Icons.shelves),
                       title: const Text("Rak Buku Saya"),
-                      initiallyExpanded: true, // Biarkan terbuka di awal
+                      initiallyExpanded: true,
                       children: [
-                        // Opsi "Semua Buku"
                         ListTile(
                           contentPadding: const EdgeInsets.only(left: 72),
                           title: const Text("(Semua Buku)"),
                           onTap: () {
-                            context.pop(); // Tutup drawer
-                            context.go('/'); // Hapus filter
+                            context.pop();
+                            context.go('/');
                           },
                         ),
-                        // Opsi "Favorit"
                         ListTile(
                           contentPadding: const EdgeInsets.only(left: 72),
                           title: const Text("Favorit"),
@@ -71,13 +68,11 @@ class LibraryDrawer extends StatelessWidget {
                             context.go('/?filter=favorites');
                           },
                         ),
-                        // Loop kategori custom user (Drama, Action, dll)
                         ...shelves.map((shelfName) => ListTile(
                           contentPadding: const EdgeInsets.only(left: 72),
                           title: Text(shelfName),
                           onTap: () {
-                            context.pop(); // Tutup drawer
-                            // Navigasi dengan Query Parameter
+                            context.pop();
                             context.go('/?shelf=$shelfName');
                           },
                         )),

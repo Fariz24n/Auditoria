@@ -62,6 +62,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _seriesCtrl.dispose();
     _tagsCtrl.dispose();
     _shelfCtrl.dispose();
+    _newCategoryCtrl.dispose();
     super.dispose();
   }
 
@@ -88,7 +89,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         _authorCtrl.text = book.author ?? '';
         _descCtrl.text = book.description ?? '';
         _seriesCtrl.text = book.series ?? '';
-        _tagsCtrl.text = book.tags ?? '';
+        
         _isFavorite = book.isFavorite;
         _coverPath = book.coverPath;
 
@@ -106,7 +107,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
   Future<void> _loadCategories() async {
   // Ambil semua kategori
-  final categories = await widget.db.getAllCategories();
+  final categories = await widget.db.select(widget.db.categories).get();
+
 
   // Ambil kategori milik buku ini
   final catOfBook = await widget.db.getCategoriesOfBook(widget.bookId);
@@ -151,19 +153,19 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       finalShelf = null;
     }
 
-    await widget.db.updateBook(
-      BooksCompanion(
-        id: drift.Value(widget.bookId),
-        title: drift.Value(_titleCtrl.text),
-        author: drift.Value(_authorCtrl.text),
-        description: drift.Value(_descCtrl.text),
-        series: drift.Value(_seriesCtrl.text),
-        tags: drift.Value(_tagsCtrl.text),
-        theme: drift.Value(finalShelf), // Simpan Rak
-        isFavorite: drift.Value(_isFavorite),
-        coverPath: drift.Value(_coverPath),
-      ),
-    );
+    await (widget.db.update(widget.db.books)
+          ..where((t) => t.id.equals(widget.bookId)))
+      .write(
+        BooksCompanion(
+          title: drift.Value(_titleCtrl.text),
+          author: drift.Value(_authorCtrl.text),
+          description: drift.Value(_descCtrl.text),
+          series: drift.Value(_seriesCtrl.text),
+          theme: drift.Value(finalShelf),
+          isFavorite: drift.Value(_isFavorite),
+          coverPath: drift.Value(_coverPath),
+        ),
+      );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -177,21 +179,42 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   final name = _newCategoryCtrl.text.trim();
   if (name.isEmpty) return;
 
-  final newId = await widget.db.addCategory(name);
-  await widget.db.assignCategoryToBook(widget.bookId, newId);
+  final id = await widget.db.into(widget.db.categories).insert(
+    CategoriesCompanion(
+      name: drift.Value(name),
+    ),
+  );
+  await widget.db.assignCategoryToBook(widget.bookId, id);
 
   _newCategoryCtrl.clear();
-  _loadCategories(); // refresh UI
+  _loadCategories();
  }
 
  Future<void> _toggleCategory(int categoryId) async {
-  if (_bookCategoryIds.contains(categoryId)) {
-    await widget.db.removeCategoryFromBook(widget.bookId, categoryId);
+  final exists = await (widget.db.select(widget.db.bookCategoryMap)
+    ..where((m) =>
+      m.bookId.equals(widget.bookId) &
+      m.categoryId.equals(categoryId)))
+    .getSingleOrNull();
+
+  if (exists != null) {
+    await (widget.db.delete(widget.db.bookCategoryMap)
+      ..where((m) =>
+        m.bookId.equals(widget.bookId) &
+        m.categoryId.equals(categoryId)))
+      .go();
   } else {
-    await widget.db.assignCategoryToBook(widget.bookId, categoryId);
+    await widget.db.into(widget.db.bookCategoryMap).insert(
+      BookCategoryMapCompanion.insert(
+        bookId: widget.bookId,
+        categoryId: categoryId,
+      ),
+    );
   }
+
   _loadCategories();
-  }
+}
+
 
 
   Future<void> _deleteBook() async {
@@ -211,9 +234,11 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     );
 
     if (confirm == true) {
-      await widget.db.deleteBook(widget.bookId);
+      await (widget.db.delete(widget.db.books)
+            ..where((t) => t.id.equals(widget.bookId)))
+          .go();
       if (mounted) {
-        context.go('/'); // Kembali ke home
+        context.go('/');
       }
     }
   }

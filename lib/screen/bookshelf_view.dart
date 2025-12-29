@@ -34,9 +34,20 @@ class _BookshelfViewState extends State<BookshelfView> {
     return LayoutBuilder(
       builder: (context, c) {
         final screenWidth = c.maxWidth;
+
+        const rowHorizontalPadding = 16.0 * 2; // ShelfRow padding kiri + kanan (32px total)
+        const bookHorizontalPadding = 2.0 * 2; // DraggableBookSpine padding per buku (4px total per book)
+
         final booksPerShelf = _calcBooksPerShelf(screenWidth);
-        final bookWidth = (screenWidth - 48) / booksPerShelf - 16;
-        final bookHeight = bookWidth * 1.45;
+
+        // Correct calculation: Total available space divided by number of books
+        // Each book takes: bookWidth + bookHorizontalPadding
+        // Formula: screenWidth - rowHorizontalPadding = booksPerShelf × (bookWidth + bookHorizontalPadding)
+        // Solving: bookWidth = (screenWidth - rowHorizontalPadding) / booksPerShelf - bookHorizontalPadding
+        final bookWidth =
+            (screenWidth - rowHorizontalPadding) / booksPerShelf.floorToDouble() - bookHorizontalPadding;
+
+        final bookHeight = bookWidth * 1.40;
 
         final shelves = _groupBooks(_currentBooks, booksPerShelf);
 
@@ -75,6 +86,7 @@ class _BookshelfViewState extends State<BookshelfView> {
       }
     });
 
+    //Agar urutan buku berubah
     widget.db.reorderBooks(_currentBooks.map((b) => b.id).toList());
   }
 

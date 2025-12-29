@@ -1,22 +1,38 @@
-// lib/screen/reader.dart
 import 'dart:async';
 import 'dart:io';
+import 'dart:collection';
 import 'package:flutter/foundation.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+
 import '../service/ai/theme_service.dart';
 import '../service/music_service.dart';
 import '../service/ai/ai_activation.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
-import '../service/ai/chapter_parser.dart';
+import '../service/ai/mood_vector.dart';
+import '../service/ai/page_summary.dart';
+import '../service/ai/chapter_emotion_map.dart';
+import '../service/ai/chapter_preprocessor.dart';
+import '../service/database_instance.dart';
 
-
-class ReadingSessionManager {
+/// Phase 1 + Phase 2 Reading State Manager
+/// - Phase 1: Mood smoothing & rolling context
+/// - Phase 2: Chapter-aware emotional context
+class ReadingStateManager {
   final ThemeAnalyzer _analyzer = ThemeAnalyzer();
   final MusicService _musicService;
+  final ChapterPreprocessor _preprocessor = ChapterPreprocessor();
 
-  // ====== SIMPLIFIED STATE ======
-  bool _isAnalyzing = false;        // Currently analyzing?
+  // ====== STATE ======
+  bool _isAnalyzing = false;
 
-  bool _hasProcessedCurrentPage = false;
+  static const int _maxRecentPages = 3;
+  final Queue<PageSummary> _recentPages = Queue();
+
+  static const int _maxMoodHistory = 5;
+  final Queue<MoodVector> _moodHistory = Queue();
+
+  // ====== CHAPTER CONTEXT ======
+  ChapterEmotionMapData? _currentChapterMap;
+  String? _lastChapterId;
 
   final _themeController = StreamController<String>.broadcast();
   Stream<String> get onThemeChanged => _themeController.stream;
@@ -25,170 +41,263 @@ class ReadingSessionManager {
   bool get isAnalyzing => _isAnalyzing;
 
   StreamSubscription<bool>? _activationSub;
+  Timer? _themeDebounce;
 
-  ReadingSessionManager(this._musicService) {
-    // Listener: AI theme → ganti musik
-    onThemeChanged.listen((theme) {
-      _musicService.setPlaylistByTheme(theme);
-    });
+  ReadingStateManager(this._musicService) {
+    onThemeChanged.listen(_musicService.setPlaylistByTheme);
 
-    // Listener: AI on/off
     _activationSub =
         AiActivationService.instance.onActivationChanged.listen((active) {
-      if (active) {
-        _hasProcessedCurrentPage = false;
-      }
+      if (!active) return;
     });
   }
 
   // ================================================================
-  // ON-DEMAND ANALYSIS - No Indexing, Just Analyze Current Pages
+  // PHASE 1 HELPERS
   // ================================================================
-  Future<void> analyzeCurrentPages(String pdfPath, int currentPage) async {
-    if (_isAnalyzing) return;
 
-    _isAnalyzing = true;
-    // Hentikan debounce/timer sebelumnya jika ada
-    _themeDebounce?.cancel(); 
-    
-    debugPrint("🚀 [Reader] Memulai analisis halaman $currentPage via ChapterParser...");
-
-    try {
-      // 1. Ambil Raw Text (Reader tetap harus melakukan I/O ini)
-      final pageRange = _calculatePageRange(currentPage);
-      final rawText = await compute(
-        _extractPagesText,
-        {'path': pdfPath, 'startPage': pageRange['start']!, 'endPage': pageRange['end']!},
-      ).timeout(const Duration(seconds: 10), onTimeout: () => '');
-
-      if (rawText.isEmpty || rawText.length < 50) {
-        debugPrint("⚠️ [Reader] Teks kosong/terlalu pendek.");
-        _emitTheme('default');
-        return;
-      }
-
-      // 2. 🔥 INTEGRASI CHAPTER PARSER 🔥
-      // Kita panggil fungsi chunkTextForRAG milik ChapterParser.
-      // Fungsi ini sudah punya logika 'Smart Boundary' dan pembersihan dasar.
-      // Kita set chunkSize 1000 karakter agar pas untuk konteks AI (tidak kepanjangan).
-      
-      final List<Map<String, dynamic>> chunks = await compute(
-        _processWithParser, // Fungsi helper baru (lihat di bawah)
-        rawText,
-      );
-
-      if (chunks.isEmpty) {
-        debugPrint("⚠️ [Reader] ChapterParser tidak menghasilkan chunk valid.");
-        _emitTheme('default');
-        return;
-      }
-
-      // 3. Seleksi Chunk Terbaik
-      // Karena kita mengambil range halaman (misal hal 4,5,6), 
-      // kita ambil chunk yang berada di "tengah" atau chunk pertama yang cukup panjang.
-      // Ini mewakili inti cerita di halaman tersebut.
-      final selectedChunk = chunks
-        .map((c) => c['content'] as String)
-        .reduce((a, b) => a.length > b.length ? a : b);
-      
-      debugPrint("✅ [Reader] ChapterParser berhasil! Mengirim ${selectedChunk.length} chars ke AI.");
-      debugPrint("📝 [Preview] ${selectedChunk.substring(0, 100)}...");
-
-      // 4. Kirim ke ThemeAnalyzer
-      final theme = await _analyzer.getThemeFromContext(
-        selectedChunk, // Teks ini sudah bersih berkat ChapterParser
-        'Analyze emotional theme...',
-      );
-
-      _emitTheme(theme ?? 'default');
-      AiActivationService.instance.setActive(false);
-
-    } catch (e) {
-      debugPrint("🚨 [Reader] Error: $e");
-      _emitTheme('default');
-    } finally {
-      _isAnalyzing = false;
-      // Auto-off logic (tetap dipertahankan)
-      // Future.delayed(const Duration(milliseconds: 500), () {
-      //   if (AiActivationService.instance.isActive) {
-      //      AiActivationService.instance.setActive(false);
-      //   }
-      // });
+  void _addPageToHistory(PageSummary summary) {
+    _recentPages.add(summary);
+    while (_recentPages.length > _maxRecentPages) {
+      _recentPages.removeFirst();
     }
   }
 
-  // --- HELPER UNTUK COMPUTE ISOLATE ---
-  // Taruh ini di luar class atau sebagai static method
-  static List<Map<String, dynamic>> _processWithParser(String text) {
-    // Memanfaatkan logika cleaning & chunking yang sudah Anda buat di ChapterParser
-    // source: [cite: 83]
-    return ChapterParser.chunkTextForRAG(
-      text,
-      chunkSize: 1000, // Ukuran ideal untuk analisis tema
-      overlap: 100,    // Supaya konteks antar potongan tidak hilang
+  void _addMoodToHistory(MoodVector mood) {
+    _moodHistory.add(mood);
+    while (_moodHistory.length > _maxMoodHistory) {
+      _moodHistory.removeFirst();
+    }
+  }
+
+  String _buildLocalContext() {
+    if (_recentPages.isEmpty) return '';
+    final buffer = StringBuffer('RECENT PAGES:\n');
+    for (final page in _recentPages) {
+      buffer.writeln(page.toString());
+    }
+    return buffer.toString();
+  }
+
+  // ================================================================
+  // PHASE 2 — CHAPTER CONTEXT (FIXED)
+  // ================================================================
+
+  int _toChapterRelativePage(int absolutePage) {
+    final chapterIndex = _extractChapterIndex(absolutePage);
+    final chapterStart = (chapterIndex - 1) * 10 + 1;
+    return (absolutePage - chapterStart) + 1;
+  }
+
+  Future<void> _ensureChapterContext(String pdfPath, int currentPage) async {
+    final chapterId = _generateChapterId(pdfPath, currentPage);
+
+    if (chapterId == _lastChapterId &&
+        _currentChapterMap != null &&
+        _currentChapterMap!.isValid()) {
+      return;
+    }
+
+    _lastChapterId = chapterId;
+
+    final cached = await db.getChapterEmotionMap(chapterId);
+    if (cached != null) {
+      try {
+        final map =
+            ChapterEmotionMapData.fromJsonString(cached.emotionMapJson);
+        if (map.isValid()) {
+          _currentChapterMap = map;
+          return;
+        }
+      } catch (_) {
+        debugPrint('📖 Cache corrupted, reanalyzing...');
+      }
+    }
+
+    final chapterText = await _extractChapterText(pdfPath, currentPage);
+    if (chapterText.length < 100) return;
+
+    _currentChapterMap = await _preprocessor.analyzeChapter(
+      chapterText: chapterText,
+      chapterId: chapterId,
+      totalPages: 10, // Phase 2 limitation
+    );
+
+    await db.saveChapterEmotionMap(
+      chapterId,
+      _extractBookIdFromPath(pdfPath),
+      _extractChapterIndex(currentPage),
+      _currentChapterMap!.toJsonString(),
     );
   }
 
-  // ================================================================
-  // HELPER: Calculate page range (current ± 1 page)
-  // ================================================================
-  Map<String, int> _calculatePageRange(int currentPage) {
-    final start = (currentPage - 1).clamp(1, currentPage);
-    final end = currentPage + 1;
-    return {'start': start, 'end': end};
+  String _buildEnrichedContext(String currentPageText, int pageNumber) {
+    final buffer = StringBuffer();
+
+    if (_currentChapterMap != null && _currentChapterMap!.isValid()) {
+      buffer.writeln('CHAPTER CONTEXT:');
+      buffer.writeln(_currentChapterMap!.chapterSummary);
+
+      final relativePage = _toChapterRelativePage(pageNumber);
+      final segment =
+          _currentChapterMap!.findSegmentForPage(relativePage);
+
+      if (segment != null) {
+        final sceneMood = (segment.dominantMood.isNotEmpty
+            ? segment.dominantMood
+            : (_currentChapterMap?.overallTone ?? 'neutral'));
+        buffer.writeln('\nCURRENT SCENE MOOD: $sceneMood');
+        buffer.writeln('KEY EVENTS: ${segment.keyEvents}');
+      }
+      buffer.writeln('');
+    }
+
+    final localContext = _buildLocalContext();
+    if (localContext.isNotEmpty) {
+      buffer.writeln(localContext);
+      buffer.writeln('');
+    }
+
+    buffer.writeln('CURRENT PAGE:');
+    buffer.writeln(currentPageText);
+
+    return buffer.toString();
   }
 
-// ================================================================
-  // PDF TEXT EXTRACTION (Specific Pages Only)
   // ================================================================
-  static Future<String> _extractPagesText(Map<String, dynamic> params) async {
-    final path = params['path'] as String;
-    final startPage = params['startPage'] as int;
-    final endPage = params['endPage'] as int;
+  // MAIN ORCHESTRATOR (CLEAN)
+  // ================================================================
+
+  Future<void> analyzeCurrentPages(String pdfPath, int currentPage) async {
+    if (_isAnalyzing) return;
+    _isAnalyzing = true;
 
     try {
-      final bytes = await File(path).readAsBytes();
-      final doc = PdfDocument(inputBytes: bytes);
+      // Clear recent pages to ensure fresh analysis of current page only
+      _recentPages.clear();
       
+      await _ensureChapterContext(pdfPath, currentPage);
+      final rawText = await compute(_extractPagesText, {
+        'path': pdfPath,
+        'startPage': currentPage,
+        'endPage': currentPage,
+      });
+
+      if (rawText.isEmpty) return;
+
+      // GUARD: Ensure page text is substantial enough for meaningful analysis
+      if (rawText.trim().length < 200) {
+        debugPrint("⚠️ [READER] Page text too short (${rawText.trim().length} chars) — skipping AI analysis");
+        return;
+      }
+
+      debugPrint("=== AI INPUT PAGE TEXT ===");
+      debugPrint("TEXT LENGTH: ${rawText.length} characters");
+      debugPrint("FIRST 500 CHARS: ${rawText.substring(0, rawText.length > 500 ? 500 : rawText.length)}");
+      debugPrint("========================");
+
+      final context =
+          _buildEnrichedContext(rawText, currentPage);
+
+      final themeString = await _analyzer.getThemeFromContext(
+        context,
+        'Analyze emotional tone',
+      );
+      
+      debugPrint('🎯 [READER] AI_RAW_THEME: "$themeString"');
+
+      // Handle exception case where no clear theme detected
+      final rawMood = themeString != null 
+          ? MoodVector.fromTheme(themeString, currentPage)
+          : MoodVector.fromTheme('tense', currentPage);
+      
+      debugPrint('📊 [READER] POST_MAPPING (raw mood): ${rawMood.primaryMood} [v=${rawMood.valence.toStringAsFixed(2)}, a=${rawMood.arousal.toStringAsFixed(2)}, t=${rawMood.tension.toStringAsFixed(2)}]');
+
+      final smoothedMood = _moodHistory.isEmpty
+          ? rawMood
+          : MoodVector.smooth(
+              rawMood,
+              _moodHistory.toList(),
+              alpha: 0.4,
+            );
+      
+      debugPrint('📊 [READER] POST_SMOOTHING: ${smoothedMood.primaryMood} [v=${smoothedMood.valence.toStringAsFixed(2)}, a=${smoothedMood.arousal.toStringAsFixed(2)}, t=${smoothedMood.tension.toStringAsFixed(2)}]');
+
+      _addMoodToHistory(smoothedMood);
+
+      final pageSummary = PageSummary.fromText(
+        rawText,
+        currentPage,
+        smoothedMood,
+      );
+      _addPageToHistory(pageSummary);
+
+      final finalTheme = smoothedMood.toMusicTheme();
+      debugPrint('🎵 [READER] FINAL_MUSIC_THEME: "$finalTheme"');
+      debugPrint('${'-' * 60}\n');
+      
+      _emitTheme(finalTheme);
+      AiActivationService.instance.setActive(false);
+    } finally {
+      _isAnalyzing = false;
+    }
+  }
+
+  // ================================================================
+  // HELPERS
+  // ================================================================
+
+  String _generateChapterId(String pdfPath, int pageNumber) {
+    final bookId = _extractBookIdFromPath(pdfPath);
+    final chapterIndex = _extractChapterIndex(pageNumber);
+    return 'book_${bookId}_chapter_$chapterIndex';
+  }
+
+  int _extractBookIdFromPath(String path) =>
+      path.hashCode.abs() % 100000;
+
+  int _extractChapterIndex(int pageNumber) =>
+      (pageNumber / 10).floor() + 1;
+
+  Future<String> _extractChapterText(
+      String pdfPath, int currentPage) async {
+    final startPage = (currentPage - 5).clamp(1, currentPage);
+    final endPage = currentPage + 5;
+
+    return compute(_extractPagesText, {
+      'path': pdfPath,
+      'startPage': startPage,
+      'endPage': endPage,
+    });
+  }
+
+  static Future<String> _extractPagesText(
+      Map<String, dynamic> params) async {
+    try {
+      final bytes = await File(params['path']).readAsBytes();
+      final doc = PdfDocument(inputBytes: bytes);
+
       final buffer = StringBuffer();
       final totalPages = doc.pages.count;
 
-      // Extract only requested pages
-      for (int i = startPage - 1; i < endPage && i < totalPages; i++) {
-        final pageText = PdfTextExtractor(doc).extractText(startPageIndex: i, endPageIndex: i);
-        buffer.writeln(pageText);
+      for (int i = params['startPage'] - 1;
+          i < params['endPage'] && i < totalPages;
+          i++) {
+        buffer.writeln(
+          PdfTextExtractor(doc)
+              .extractText(startPageIndex: i, endPageIndex: i),
+        );
         buffer.writeln('\n--- Page Break ---\n');
       }
 
       doc.dispose();
-
-      // --- 🔥 DEBUG LOG (SUKSES) ---
-      final result = buffer.toString();
-      
-      debugPrint("=== PDF DEBUG ===");
-      debugPrint("Page Range: $startPage - $endPage");
-      debugPrint("Total Text Length: ${result.length}");
-      
-      // Ambil 100 karakter pertama dengan aman (cek panjang dulu biar gak error)
-      final preview = result.length > 100 ? result.substring(0, 100) : result;
-      // Ganti enter dengan spasi biar log rapi
-      debugPrint("Preview Text: ${preview.replaceAll('\n', ' ')}"); 
-      debugPrint("=================");
-
-      return result; // Kembalikan teks asli
-
+      return buffer.toString();
     } catch (e) {
       debugPrint('PDF extraction error: $e');
       return '';
     }
   }
 
-  // No complex indexing or continuous analysis needed!
-
-  // ================================================================
-  // THROTTLED THEME EMITTER
-  // ================================================================
-  Timer? _themeDebounce;
   void _emitTheme(String theme) {
     _themeDebounce?.cancel();
     _themeDebounce =
@@ -204,5 +313,7 @@ class ReadingSessionManager {
     _themeDebounce?.cancel();
     _themeController.close();
     _musicService.stop();
+    _recentPages.clear();
+    _moodHistory.clear();
   }
 }
