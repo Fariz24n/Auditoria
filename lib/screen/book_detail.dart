@@ -37,7 +37,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
 
   List<Category> _allCategories = [];
   List<int> _bookCategoryIds = []; // kategori yang dimiliki buku ini
-  TextEditingController _newCategoryCtrl = TextEditingController();
+  final TextEditingController _newCategoryCtrl = TextEditingController();
+
 
 
   @override
@@ -442,7 +443,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     const SizedBox(height: 16),
 
 // ===================== CATEGORY SECTION =====================
-                    Align(
+                    const Align(
                       alignment: Alignment.centerLeft,
                       child: Text("Kategori Buku",
                           style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
